@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Hindsight — bet on what already happened</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">◷</span> hindsight</div>
+  <div class="topbar-right">
+    <div class="stat"><label>era</label><span id="eraChip">—</span></div>
+    <div class="stat"><label>balance</label><span id="balance">1000</span><em>pts</em></div>
+  </div>
+</header>
+
+<!-- ─────────────────────────── era select ─────────────────────────── -->
+<section id="screenSelect" class="screen active">
+  <div class="hero">
+    <h1>Somewhere in Ethereum's past,<br /><i>this actually happened.</i></h1>
+    <p class="sub">
+      Every candle is a real Uniswap swap, cryptographically proven onto Creditcoin.
+      Work out <em>when</em> you are, then bet on what came next.
+    </p>
+  </div>
+  <div id="windowGrid" class="window-grid"></div>
+</section>
+
+<!-- ─────────────────────────── play ─────────────────────────── -->
+<section id="screenPlay" class="screen">
+  <div class="play-wrap">
+
+    <aside class="panel riddle-panel">
+      <div class="panel-head">
+        <span class="tag">the riddle</span>
+        <button id="btnBack" class="ghost">← eras</button>
+      </div>
+      <blockquote id="riddleText">…</blockquote>
+      <div class="guess-row">
+        <input id="guessInput" placeholder="which year? e.g. 2022" autocomplete="off" spellcheck="false" />
+        <button id="btnGuess" class="ghost">guess</button>
+      </div>
+      <div id="guessResult" class="guess-result"></div>
+
+      <div class="divider"></div>
+
+      <div class="panel-head"><span class="tag">your bets</span></div>
+      <div id="betList" class="bet-list"><p class="muted">Tap cells on the grid →</p></div>
+      <div class="stake-row">
+        <label>stake / cell</label>
+        <div class="stepper">
+          <button data-stake="-" class="ghost">−</button>
+          <span id="stakeValue">10</span>
+          <button data-stake="+" class="ghost">+</button>
+        </div>
+      </div>
+      <div class="totals">
+        <div><label>staked</label><span id="totalStaked">0</span></div>
+        <div><label>max win</label><span id="maxWin" class="win">0</span></div>
+      </div>
+      <button id="btnPlay" class="primary" disabled>place bets & reveal</button>
+      <p class="fineprint">
+        Multipliers are computed from the <strong>visible</strong> candles only —
+        the odds cannot leak the hidden path.
+      </p>
+    </aside>
+
+    <main class="board">
+      <div class="board-head">
+        <div class="price-now">
+          <label>last known price</label>
+          <span id="anchorPrice">$0</span>
+        </div>
+        <div class="legend">
+          <span class="dot visible"></span> proven history
+          <span class="dot future"></span> not yet revealed
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <!-- chart is drawn as pixels; no numeric series exists in the DOM -->
+        <canvas id="chart"></canvas>
+        <div id="gridOverlay" class="grid-overlay"></div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ─────────────────────────── result ─────────────────────────── -->
+<section id="screenResult" class="screen">
+  <div class="result-card">
+    <div id="resultVerdict" class="verdict">—</div>
+    <div id="resultAmount" class="amount">0</div>
+    <p id="resultEra" class="result-era"></p>
+    <div id="resultBreakdown" class="breakdown"></div>
+    <div class="result-actions">
+      <button id="btnAgain" class="primary">play another era</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" class="toast"></div>
+
+<script>
+window.__errs = [];
+window.addEventListener('error', e => window.__errs.push(e.message + ' @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno + ':' + e.colno));
+window.addEventListener('unhandledrejection', e => window.__errs.push('REJECT: ' + ((e.reason && e.reason.stack) || e.reason)));
+</script>
+<script src="app.js" type="module"></script>
+</body>
+</html>

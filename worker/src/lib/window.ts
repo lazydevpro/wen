@@ -20,6 +20,16 @@ export const MAX_MULTIPLIER = 250;
 /** Never quote a multiplier below this; sub-1x cells still return something. */
 export const MIN_MULTIPLIER = 0.3;
 
+/**
+ * Total grid height in standard deviations of the horizon.
+ *
+ * Calibrated against real outcomes, not chosen a priori. At the original 6.0 the grid was
+ * roughly twice as wide as real price paths ever travel, so the outer bands never hit,
+ * players paid for unwinnable cells, and the realised house edge ballooned to 56%.
+ * See `pnpm simulate`.
+ */
+export const GRID_SIGMA_SPAN = Number(process.env.GRID_SIGMA_SPAN ?? 2.55);
+
 export interface Candle {
     index: number;
     blockNumber: number;
@@ -167,7 +177,7 @@ export function buildGrid(
 ): {grid: GridCell[]; bandHeight: number} {
     // grid spans roughly +/-3 sigma over the full horizon
     const horizonSigma = sigma * Math.sqrt(timeSteps);
-    const bandHeight = (6 * horizonSigma) / bands;
+    const bandHeight = (GRID_SIGMA_SPAN * horizonSigma) / bands;
 
     const hits: number[][] = Array.from({length: timeSteps}, () => new Array(bands).fill(0));
 

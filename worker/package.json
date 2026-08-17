@@ -9,7 +9,10 @@
     "spike:hist": "tsx src/spike-historical.ts",
     "fixture": "tsx src/make-fixture.ts",
     "build-window": "tsx src/build-window.ts",
-    "export-window": "tsx src/export-window.ts"
+    "export-window": "tsx src/export-window.ts",
+    "register-windows": "tsx src/register-windows.ts",
+    "export-public": "tsx src/export-public.ts",
+    "simulate": "tsx src/simulate.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",
