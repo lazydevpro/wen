@@ -8,7 +8,8 @@
     "spike:batch": "tsx src/spike-batch.ts",
     "spike:hist": "tsx src/spike-historical.ts",
     "fixture": "tsx src/make-fixture.ts",
-    "build-window": "tsx src/build-window.ts"
+    "build-window": "tsx src/build-window.ts",
+    "export-window": "tsx src/export-window.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",
