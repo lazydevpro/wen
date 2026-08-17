@@ -310,7 +310,41 @@ function finish(staked, bands) {
         )
         .join('');
 
+    recordScore(state.win.eraLabel, net);
     show('screenResult');
+}
+
+// ───────────────────────────────────────────────── leaderboard
+
+const LB_KEY = 'hindsight.leaderboard';
+
+function recordScore(era, net) {
+    let board = [];
+    try { board = JSON.parse(localStorage.getItem(LB_KEY) || '[]'); } catch { board = []; }
+    const entry = {era, net: Math.round(net), at: Date.now()};
+    board.push(entry);
+    board.sort((a, b) => b.net - a.net);
+    board = board.slice(0, 10);
+    localStorage.setItem(LB_KEY, JSON.stringify(board));
+    renderLeaderboard(entry);
+}
+
+function renderLeaderboard(justPlayed) {
+    let board = [];
+    try { board = JSON.parse(localStorage.getItem(LB_KEY) || '[]'); } catch { board = []; }
+    const ol = $('leaderboard');
+    if (!ol) return;
+    if (board.length === 0) {
+        ol.innerHTML = '<div class="empty">no runs yet</div>';
+        return;
+    }
+    ol.innerHTML = board
+        .map((e) => {
+            const mine = justPlayed && e.at === justPlayed.at;
+            const label = e.era.split('—')[0].trim();
+            return `<li class="${mine ? 'you' : ''}"><span>${label}</span><b>${e.net >= 0 ? '+' : ''}${e.net}</b></li>`;
+        })
+        .join('');
 }
 
 // ───────────────────────────────────────────────── controls

@@ -199,3 +199,14 @@ button { font-family: var(--mono); cursor: pointer; }
     .result-card { margin: 26px auto; padding: 30px 20px; }
     .amount { font-size: 38px; }
 }
+
+/* ───────────────────────── leaderboard ───────────────────────── */
+.lb { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line-soft); text-align: left; }
+.lb ol { list-style: none; counter-reset: lb; margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.lb li { counter-increment: lb; display: flex; justify-content: space-between; align-items: center;
+         font-size: 11px; padding: 7px 11px; background: rgba(0,0,0,0.28); border-radius: 7px; }
+.lb li::before { content: counter(lb); color: var(--muted); margin-right: 10px; min-width: 14px; }
+.lb li span:first-of-type { flex: 1; color: var(--muted); }
+.lb li b { color: var(--lime); }
+.lb li.you { border: 1px solid var(--pink); }
+.lb .empty { color: var(--muted); font-size: 11px; padding: 8px 2px; }

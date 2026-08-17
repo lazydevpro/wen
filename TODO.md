@@ -41,7 +41,7 @@ Legend: `- [ ]` open · `- [~]` in progress · `- [x]` done
 - [x] Bet placement UX (multi-cell, sizing) #frontend
 - [x] Riddle panel with era-guess bonus #frontend
 - [x] Reveal animation — the chart plays forward, cells ignite #frontend
-- [ ] Leaderboard #frontend
+- [x] Leaderboard (localStorage, top 10) #frontend
 - [x] Riddles written for all six eras #content
 
 ## Verification — must pass before submitting
@@ -53,10 +53,10 @@ Legend: `- [ ]` open · `- [~]` in progress · `- [x]` done
 - [x] ❌ Tampered candle → fails Merkle inclusion
 - [x] Audited — sigma and grid derive from visible candles only
 - [x] Calibrated against REAL outcomes (better test than resampling the model): 95.3% RTP
-- [x] Full round playable end to end (leaderboard still open)
+- [x] Full round playable end to end
 - [x] Worker journals progress; restart never double-submits
 
-## Submission
+## Submission — needs you
 
 - [x] [ATTESTCOIN_INTEGRATION.md](docs/ATTESTCOIN_INTEGRATION.md) — explicitly a scoring criterion #docs
 - [x] README with setup, architecture, deployed addresses #docs
