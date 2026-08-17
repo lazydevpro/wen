@@ -1,0 +1,2 @@
+forge-std/=lib/forge-std/src/
+@gluwa/usc-contracts/=node_modules/@gluwa/usc-contracts/

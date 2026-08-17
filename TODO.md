@@ -9,10 +9,11 @@ Legend: `- [ ]` open · `- [~]` in progress · `- [x]` done
 
 ## Now — de-risk the two things that could invalidate the build
 
-- [~] **Get CC3 Testnet CTC — BLOCKING for on-chain writes.** Faucet is Discord-only. Address: `0xdb79Bf82610f12E549d1320a6FdC0dc3Be2c3CcE` #blocker
+- [x] **CC3 Testnet CTC** — ✅ funded 10,000 CTC at `0xdb79Bf82610f12E549d1320a6FdC0dc3Be2c3CcE` (~50M historical proofs' worth)
+- [x] **Spike: prove HISTORY** — ✅ 5 eras from Oct 2021 → Mar 2024 all verified, prices historically accurate #spike
 - [x] **Spike: prove one real historical Uniswap V3 `Swap`** — ✅ PASSED. Verified on CC3 Testnet, tampering rejected #spike
 - [x] **Spike: batch path** — ✅ PASSED. 10 proofs / 1 shared continuity proof, 10× cheaper #spike
-- [ ] **Get an archive-capable Ethereum RPC** (Alchemy/Infura free tier). Public RPCs reject any `getLogs` >~128 blocks from head, so historical eras are unreachable without one #blocker
+- [x] **Archive-capable Ethereum RPC** — ✅ configured. Free tier caps `getLogs` at a **10-block range**, so the indexer must chunk #blocker
 - [ ] Attend the AMA (2026-08-18, 8pm KST) — ask about attestor set size, readability audit status, additional source chains #research
 - [x] Scaffold Foundry project + worker, install `@gluwa/usc-sdk` 0.18.0, pull `USCBase.sol` + `VerifierInterface.sol` #setup
 
@@ -26,8 +27,8 @@ Legend: `- [ ]` open · `- [~]` in progress · `- [x]` done
 
 ## Contracts
 
-- [ ] `ChartVerifier.sol` extending `USCBase` — with all guards: `receiptStatus == 0x1`, `log.address_ == knownPool`, replay protection #contracts
-- [ ] `sqrtPriceX96` decode + candle folding on-chain #contracts
+- [x] `ChartVerifier.sol` extending `USCBase` — all guards in place, 12 tests green against real proven mainnet data #contracts
+- [x] `sqrtPriceX96` decode on-chain — matches Ethereum ground truth exactly #contracts
 - [ ] `ChartRegistry.sol` — verified windows, Merkle roots, era tags, riddle hashes #contracts
 - [ ] Progressive candle reveal with Merkle inclusion proofs (anti-lookahead) #contracts
 - [ ] `GridGame.sol` — bets, cell resolution, payouts, bankroll, per-round exposure cap #contracts

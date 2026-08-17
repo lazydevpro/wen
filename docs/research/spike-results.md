@@ -54,6 +54,33 @@ Price series extracted from the proven batch — **this is a Hindsight chart**:
 | 25774588 | $1904.19 |
 | 25774593 | $1904.69 |
 
+## ✅ Spike 3 — HISTORICAL proof (the critical one)
+
+`attestationGenesisHeight = 0` — the chain claims full history. Confirmed empirically across five
+eras, **all verified**:
+
+| era | block | ETH | age | continuity roots | cost | verified |
+|---|---|---|---|---|---|---|
+| Oct 2021 — pre-ATH run-up | 13,314,561 | $2,937 | **1,731 days** | 440 | 1.51e-4 CTC | ✅ |
+| May 2022 — Luna collapse | 14,770,000 | $2,076 | 1,528 days | 1 | 2.33e-5 CTC | ✅ |
+| Sep 2022 — the Merge | 15,537,400 | $1,606 | 1,422 days | 601 | 1.97e-4 CTC | ✅ |
+| Nov 2022 — FTX collapse | 15,950,000 | $1,270 | 1,365 days | 1 | 2.33e-5 CTC | ✅ |
+| Mar 2024 — ETF era | 19,400,000 | $3,907 | 885 days | 1 | 2.33e-5 CTC | ✅ |
+
+**Every price is historically accurate.** ETH really was ~$2,937 in Oct 2021, ~$2,076 during Luna,
+~$1,606 at the Merge, ~$1,270 during FTX, ~$3,907 in March 2024. The pipeline returns real history.
+
+### Cost optimization discovered
+
+**Continuity root count varies from 1 to 601 depending on the block**, because sparse checkpoints
+sit at fixed intervals. A block that lands on a checkpoint needs 1 root; one that doesn't may need
+hundreds. That's an **~8× cost difference** for otherwise identical proofs.
+
+→ The indexer should prefer checkpoint-aligned blocks when sampling candles.
+
+Even the worst case (601 roots, 1.97e-4 CTC) is negligible: the 10,000 CTC faucet grant covers
+roughly **50 million** worst-case historical proofs.
+
 ## What this validates
 
 1. **The thesis holds.** A real Uniswap V3 swap from Ethereum mainnet can be proven inside

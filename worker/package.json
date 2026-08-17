@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "spike": "tsx src/spike.ts",
-    "spike:batch": "tsx src/spike-batch.ts"
+    "spike:batch": "tsx src/spike-batch.ts",
+    "spike:hist": "tsx src/spike-historical.ts",
+    "fixture": "tsx src/make-fixture.ts"
   },
   "dependencies": {
+    "@gluwa/usc-contracts": "^0.1.2",
     "@gluwa/usc-sdk": "^0.18.0",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0"

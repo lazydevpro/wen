@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@gluwa/usc-contracts':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@gluwa/usc-sdk':
         specifier: ^0.18.0
         version: 0.18.0
@@ -188,6 +191,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@gluwa/usc-contracts@0.1.2':
+    resolution: {integrity: sha512-6GbBApjqhb6uWGzo6mLOZxH2RNq8iCOoRuYXn97gIQIaIHMk/pjQdDk2vJolX11TnhQbcrtoE/em/RDQyrJJdQ==}
 
   '@gluwa/usc-sdk@0.18.0':
     resolution: {integrity: sha512-iUEXPAp1gB/HDYkXad+StVJvs0Yz2ZIbzijc8SaBflGJ95hPnVahyY+tsP2PApswSQaX2uIBM7Cb0jpZ+KBzTQ==}
@@ -575,6 +581,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@gluwa/usc-contracts@0.1.2': {}
 
   '@gluwa/usc-sdk@0.18.0':
     dependencies:

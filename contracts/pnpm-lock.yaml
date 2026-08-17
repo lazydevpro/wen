@@ -1,0 +1,22 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@gluwa/usc-contracts':
+        specifier: ^0.1.2
+        version: 0.1.2
+
+packages:
+
+  '@gluwa/usc-contracts@0.1.2':
+    resolution: {integrity: sha512-6GbBApjqhb6uWGzo6mLOZxH2RNq8iCOoRuYXn97gIQIaIHMk/pjQdDk2vJolX11TnhQbcrtoE/em/RDQyrJJdQ==}
+
+snapshots:
+
+  '@gluwa/usc-contracts@0.1.2': {}
