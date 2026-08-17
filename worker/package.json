@@ -12,7 +12,9 @@
     "export-window": "tsx src/export-window.ts",
     "register-windows": "tsx src/register-windows.ts",
     "export-public": "tsx src/export-public.ts",
-    "simulate": "tsx src/simulate.ts"
+    "simulate": "tsx src/simulate.ts",
+    "prove-candles": "tsx src/prove-candles.ts",
+    "verify-onchain": "tsx src/verify-onchain.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",

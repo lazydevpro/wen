@@ -5,6 +5,7 @@ export const CHART_VERIFIER_ABI = [
     'function registerPool(address pool,string label,uint8 token0Decimals,uint8 token1Decimals,bool invert) external',
     'function recordCandle(address pool,uint64 chainKey,uint64 blockHeight,bytes encodedTransaction,bytes32 merkleRoot,(bytes32 hash,bool isLeft)[] siblings,bytes32 lowerEndpointDigest,bytes32[] continuityRoots) external returns (bytes32)',
     'function candleCount(address pool) external view returns (uint256)',
+    'function candlesByPool(address,uint256) external view returns (bytes32)',
     'function candles(bytes32) external view returns (uint64 sourceBlock,uint160 sqrtPriceX96,address pool)',
     'function pools(address) external view returns (bool enabled,uint8 token0Decimals,uint8 token1Decimals,bool invert,string label)',
     'event CandleVerified(address indexed pool,uint64 indexed sourceBlock,uint160 sqrtPriceX96,bytes32 indexed queryId)',
