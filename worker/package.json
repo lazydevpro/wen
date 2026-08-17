@@ -1,0 +1,20 @@
+{
+  "name": "hindsight-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike": "tsx src/spike.ts",
+    "spike:batch": "tsx src/spike-batch.ts"
+  },
+  "dependencies": {
+    "@gluwa/usc-sdk": "^0.18.0",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
