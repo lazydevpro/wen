@@ -25,6 +25,9 @@
   </div>
   <div class="topbar-right">
     <div class="stat" id="creditStat" hidden><label>credit</label><span id="credit">0</span><em>CTC</em></div>
+    <!-- winnings are pulled, never pushed: a hostile receiver must not be able to block
+         permissionless resolution. This is that pull, and it only exists when there is credit. -->
+    <button id="btnWithdraw" class="ghost" hidden>withdraw</button>
     <button id="btnConnect" class="ghost">connect wallet</button>
     <div class="addr" id="addr" hidden></div>
   </div>
@@ -65,24 +68,12 @@
       <div id="faucetResult" class="guess-result"></div>
     </div>
 
-    <div class="panel deposit-panel" id="depositPanel">
-      <div class="panel-head"><span class="tag">table credit</span></div>
-      <p class="muted">
-        Winnings land here, and bets draw from it first — anything it doesn't cover rides along
-        with the bet itself. Topping up is optional.
-      </p>
-      <div class="guess-row">
-        <input id="depositInput" type="number" min="0.1" step="0.1" value="20" />
-        <button id="btnDeposit" class="ghost">top up</button>
-      </div>
-      <button id="btnWithdraw" class="ghost wide-sm">withdraw all</button>
-    </div>
-
     <div class="panel ante-panel">
       <div class="panel-head"><span class="tag">ante up</span></div>
       <p class="muted">
         Your ante is your <strong>minimum stake</strong>, not a fee — it counts toward your bets.
-        It's paid straight from your wallet as you deal; no deposit needed.
+        It's paid straight from your wallet as you deal. Winnings collect as credit and draw
+        down first on later hands; withdraw them any time from the top bar.
       </p>
       <div class="ante-grid" id="anteGrid"></div>
       <button id="btnDeal" class="primary wide" disabled>deal me a chart</button>

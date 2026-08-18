@@ -184,10 +184,15 @@ function toast(msg, ms = 2600) {
 function setPhase(next) {
     state.phase = next;
     const live = isRoundLive();
-    for (const id of ['btnFaucet', 'btnDeposit', 'btnWithdraw', 'btnDeal', 'btnConnect']) {
+    for (const id of ['btnFaucet', 'btnWithdraw', 'btnDeal', 'btnConnect']) {
         const el = $(id);
-        if (el) el.toggleAttribute('data-round-live', live);
+        if (el) {
+            el.toggleAttribute('data-round-live', live);
+            el.disabled = live;
+        }
     }
+    // the topbar withdraw is visible everywhere, so it must also hide mid-round
+    updateWithdraw();
     document.body.dataset.phase = next;
 }
 
@@ -287,8 +292,21 @@ async function refreshCredit() {
 
     // credit plus wallet is what the player can actually stake — the deposit step is gone
     const spendable = state.credit + (state.wallet > GAS_RESERVE ? state.wallet - GAS_RESERVE : 0n);
-    $('btnDeal').disabled = spendable < parseEther(String(state.ante));
-    $('depositPanel').classList.toggle('needs-funds', spendable === 0n);
+    $('btnDeal').disabled = isRoundLive() || spendable < parseEther(String(state.ante));
+    updateWithdraw();
+}
+
+/**
+ * Winnings are pulled, never pushed — resolveRound is permissionless and must not be blockable
+ * by a hostile receiver, so payouts land as credit and this is the one claim affordance.
+ * It exists only when there is something to claim, and never during a live round.
+ */
+function updateWithdraw() {
+    const btn = $('btnWithdraw');
+    if (!btn) return;
+    const show = state.address && state.credit > 0n && !isRoundLive();
+    btn.hidden = !show;
+    if (show) btn.textContent = `withdraw ${Number(formatEther(state.credit)).toFixed(2)} CTC`;
 }
 
 /** How much value must ride along so `needed` clears the current credit. */
@@ -408,26 +426,14 @@ async function claimFaucet() {
     }
 }
 
-async function doDeposit() {
-    const amt = $('depositInput').value;
-    try {
-        toast('confirm the deposit in your wallet…');
-        const tx = await state.game.deposit({value: parseEther(amt)});
-        toast('depositing…');
-        await tx.wait();
-        await refreshCredit();
-        toast(`deposited ${amt} CTC`);
-    } catch (e) {
-        toast(explain(e));
-    }
-}
-
 async function doWithdraw() {
+    if (state.credit === 0n) return;
     try {
+        toast('confirm the withdrawal in your wallet…');
         const tx = await state.game.withdraw(state.credit);
         await tx.wait();
         await refreshCredit();
-        toast('withdrawn');
+        toast('winnings withdrawn to your wallet');
     } catch (e) {
         toast(explain(e));
     }
@@ -912,7 +918,6 @@ function renderLeaderboard(justPlayed) {
 function wireControls() {
     $('btnConnect').onclick = connect;
     $('btnConnectBig').onclick = connect;
-    $('btnDeposit').onclick = doDeposit;
     $('btnFaucet').onclick = claimFaucet;
     $('btnWithdraw').onclick = doWithdraw;
     $('btnDeal').onclick = deal;
