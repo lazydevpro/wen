@@ -17,11 +17,18 @@ import {BrowserProvider, Contract, formatEther, parseEther} from 'https://esm.sh
 
 const $ = (id) => document.getElementById(id);
 
-const CC3 = {
-    chainIdHex: '0x18e8f', // 102031
+const CC3_CHAIN_ID = 102031;
+const CC3_CHAIN_ID_HEX = '0x18e8f';
+
+/**
+ * Exactly the shape `wallet_addEthereumChain` expects — the key must be `chainId`, and the
+ * explorer URL must actually resolve or several wallets reject the whole call.
+ */
+const CC3_PARAMS = {
+    chainId: CC3_CHAIN_ID_HEX,
     chainName: 'Creditcoin CC3 Testnet',
-    rpcUrls: ['https://rpc.cc3-testnet.creditcoin.network'],
     nativeCurrency: {name: 'Creditcoin', symbol: 'CTC', decimals: 18},
+    rpcUrls: ['https://rpc.cc3-testnet.creditcoin.network'],
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
@@ -95,27 +102,68 @@ function show(screen) {
 
 // ─────────────────────────────────────────────────────── wallet
 
+/** Wallets disagree about how they report "I don't know that chain". Catch all the variants. */
+function isUnknownChainError(e) {
+    const code = e?.code ?? e?.data?.originalError?.code ?? e?.error?.code;
+    if (code === 4902 || code === -32603) return true;
+    return /unrecognized chain|unknown chain|chain .* not (added|found)|add.*chain/i.test(e?.message ?? '');
+}
+
+/**
+ * Make sure the wallet is on CC3, adding the network first if it doesn't know it.
+ *
+ * Adding does not reliably switch — some wallets add silently and stay put — so the result is
+ * verified rather than assumed, with one retry.
+ */
+async function ensureCC3() {
+    const eth = window.ethereum;
+    if ((await eth.request({method: 'eth_chainId'})) === CC3_CHAIN_ID_HEX) return;
+
+    try {
+        toast('switching to Creditcoin CC3 Testnet…');
+        await eth.request({method: 'wallet_switchEthereumChain', params: [{chainId: CC3_CHAIN_ID_HEX}]});
+    } catch (e) {
+        if (e?.code === 4001) throw new Error('network switch rejected');
+        if (!isUnknownChainError(e)) throw e;
+
+        toast('adding Creditcoin CC3 Testnet to your wallet…');
+        try {
+            await eth.request({method: 'wallet_addEthereumChain', params: [CC3_PARAMS]});
+        } catch (addErr) {
+            if (addErr?.code === 4001) throw new Error('network add rejected');
+            throw addErr;
+        }
+    }
+
+    // adding is not the same as switching — confirm, and nudge once if needed
+    if ((await eth.request({method: 'eth_chainId'})) !== CC3_CHAIN_ID_HEX) {
+        try {
+            await eth.request({method: 'wallet_switchEthereumChain', params: [{chainId: CC3_CHAIN_ID_HEX}]});
+        } catch { /* fall through to the check below */ }
+    }
+
+    const finalChain = await eth.request({method: 'eth_chainId'});
+    if (finalChain !== CC3_CHAIN_ID_HEX) {
+        throw new Error(`wrong network — expected CC3 (${CC3_CHAIN_ID}), wallet is on ${parseInt(finalChain, 16)}`);
+    }
+}
+
 async function connect() {
     if (!window.ethereum) {
         toast('no wallet found — install MetaMask to play');
         return;
     }
-    state.provider = new BrowserProvider(window.ethereum);
-    await state.provider.send('eth_requestAccounts', []);
 
-    // make sure we're on CC3
-    const net = await state.provider.getNetwork();
-    if (net.chainId !== BigInt(parseInt(CC3.chainIdHex, 16))) {
-        try {
-            await window.ethereum.request({method: 'wallet_switchEthereumChain', params: [{chainId: CC3.chainIdHex}]});
-        } catch (e) {
-            if (e.code === 4902) {
-                await window.ethereum.request({method: 'wallet_addEthereumChain', params: [CC3]});
-            } else throw e;
-        }
-        state.provider = new BrowserProvider(window.ethereum);
+    try {
+        await window.ethereum.request({method: 'eth_requestAccounts'});
+        await ensureCC3();
+    } catch (e) {
+        toast(short(e));
+        return;
     }
 
+    // rebuild the provider after any network change so it reads the right chain
+    state.provider = new BrowserProvider(window.ethereum);
     state.signer = await state.provider.getSigner();
     state.address = await state.signer.getAddress();
     state.game = new Contract(GRID_GAME, GAME_ABI, state.signer);

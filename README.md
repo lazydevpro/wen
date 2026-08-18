@@ -71,6 +71,19 @@ connect wallet → deposit once → pick an ante → DEAL
 - **Multipliers are computed from the visible candles only** — the odds cannot leak the hidden path.
 - The chart plays forward; cells the real price path crosses pay out.
 
+### Wallet setup is automatic
+
+Connecting adds Creditcoin CC3 Testnet to the wallet if it isn't there, then switches to it.
+Three details that bite in practice and are handled:
+
+- `wallet_addEthereumChain` needs the key `chainId`, not a custom one — a mismatch fails silently.
+- Wallets report "I don't know that chain" inconsistently: `4902`, a nested `4902` under
+  `data.originalError`, `-32603`, or just a message. All are matched.
+- **Adding is not switching.** Some wallets add the network and stay where they are, so the
+  result is verified and retried rather than assumed.
+
+Rejections surface as a plain message instead of a dead button.
+
 ### Why two transactions
 
 The ante has to confirm **before** the chart appears. Otherwise a player deals, reverse-searches
