@@ -392,6 +392,7 @@ function buildGrid() {
             const el = document.createElement('div');
             el.className = 'cell';
             el.dataset.key = `${t}:${p}`;
+            el.dataset.mult = cell ? cell.m : 0;
             el.textContent = cell ? fmtMult(cell.m) : '';
             el.onclick = () => togglePick(t, p, cell ? cell.m : 0);
             ov.appendChild(el);
@@ -533,18 +534,42 @@ function showDeadEnd(message) {
 async function animateReveal() {
     const bands = state.reveal.outcome;
     const shown = [];
+    let running = 0;
+
     for (let t = 0; t < state.win.timeSteps; t++) {
-        await new Promise((r) => setTimeout(r, 380));
+        await new Promise((r) => setTimeout(r, 420));
         shown.push(state.reveal.hidden[t]);
         drawPartial(shown);
+
         const landed = bands[t]?.p;
         document.querySelectorAll(`.cell[data-key^="${t}:"]`).forEach((el) => {
             const p = Number(el.dataset.key.split(':')[1]);
-            if (p === landed) el.classList.add('hit');
-            else if (el.classList.contains('picked')) el.classList.add('miss');
+            const bet = state.picks.get(`${t}:${p}`);
+            const isLanded = p === landed;
+
+            // Three distinct states. Previously every cell in the landed band turned green,
+            // so a whole row lit up as if it had won even where nothing was staked.
+            if (isLanded) el.classList.add('landed'); // where the price actually went
+            if (bet && isLanded) {
+                el.classList.add('won');
+                const payout = bet.stake * bet.mult;
+                running += payout;
+                el.innerHTML = `<span class="cell-badge">+${payout.toFixed(1)}</span>`;
+            } else if (bet) {
+                el.classList.add('lost');
+                el.innerHTML = `<span class="cell-badge">−${bet.stake.toFixed(1)}</span>`;
+            }
         });
+
+        // live running total so the player can see it going right or wrong as it unfolds
+        const net = running - totalStaked();
+        const rt = $('runningTotal');
+        if (rt) {
+            rt.textContent = (net >= 0 ? '+' : '') + net.toFixed(2);
+            rt.className = 'running ' + (net > 0 ? 'up' : net < 0 ? 'down' : '');
+        }
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 600));
 }
 
 /** Resolution is permissionless — the client does it so the whole loop is visible on-chain. */
@@ -645,13 +670,15 @@ function drawChart() {
     };
 
     line(visible, 0, '#ff5ea8', 2.4, 12);
-    if (revealed.length) line([visible[visible.length - 1], ...revealed], visible.length - 1, '#c8ff4d', 2.4, 14);
+    // The revealed path is deliberately NEUTRAL white, not green. Green is reserved for
+    // "your bet won" — colouring the whole line green made every reveal read as a win.
+    if (revealed.length) line([visible[visible.length - 1], ...revealed], visible.length - 1, '#ffffff', 2.4, 10);
 
     const headVal = revealed.length ? revealed[revealed.length - 1] : visible[visible.length - 1];
     const headIdx = revealed.length ? visible.length - 1 + revealed.length : visible.length - 1;
     ctx.beginPath();
     ctx.arc(X(headIdx), Y(headVal), 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = revealed.length ? '#c8ff4d' : '#ff5ea8';
+    ctx.fillStyle = revealed.length ? '#ffffff' : '#ff5ea8';
     ctx.fill();
 }
 

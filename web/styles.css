@@ -20,24 +20,30 @@
 /* the hidden attribute loses to display:flex/grid without this */
 [hidden] { display: none !important; }
 
+/* dvh tracks mobile browser chrome; the vh line is the fallback. Avoids the
+   html->body height:100% chain, which collapses whenever the viewport is unusual. */
 body {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
     background:
         radial-gradient(1100px 600px at 78% -8%, rgba(255, 94, 168, 0.14), transparent 60%),
         radial-gradient(900px 500px at 10% 105%, rgba(120, 80, 255, 0.12), transparent 60%),
         var(--bg);
     color: var(--ink);
     font-family: var(--mono);
-    min-height: 100vh;
-    overflow-x: hidden;
+    overflow: hidden;
     -webkit-font-smoothing: antialiased;
 }
 
 /* ───────────────────────── topbar ───────────────────────── */
 .topbar {
+    flex: 0 0 auto;
     display: flex; align-items: center; justify-content: space-between;
     padding: 18px 26px;
     border-bottom: 1px solid var(--line-soft);
-    position: sticky; top: 0; z-index: 40;
+    z-index: 40;
     backdrop-filter: blur(14px);
     background: rgba(10, 7, 16, 0.72);
 }
@@ -50,8 +56,10 @@ body {
 .stat em { font-style: normal; font-size: 10px; color: var(--muted); margin-left: 3px; }
 
 /* ───────────────────────── screens ───────────────────────── */
-.screen { display: none; padding: 30px 26px 60px; }
-.screen.active { display: block; animation: fade 0.35s ease; }
+.screen { display: none; flex: 1 1 auto; min-height: 0; padding: 22px 26px; }
+/* connect / lobby / result may scroll internally; the play table must not */
+.screen.active { display: block; overflow-y: auto; animation: fade 0.35s ease; }
+#screenPlay.active { display: flex; overflow: hidden; padding-bottom: 22px; }
 @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 .hero { max-width: 760px; margin: 34px auto 40px; text-align: center; }
@@ -76,19 +84,24 @@ body {
 .window-card .locked { color: var(--pink); }
 
 /* ───────────────────────── play layout ───────────────────────── */
-.play-wrap { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 20px; max-width: 1380px; margin: 0 auto; }
+.play-wrap { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px;
+             max-width: 1440px; margin: 0 auto; width: 100%; height: 100%; min-height: 0; }
 /* grid children default to min-width:auto and refuse to shrink below their content,
    which overflows the page on narrow viewports */
 .play-wrap > * { min-width: 0; }
 @media (max-width: 940px) { .play-wrap { grid-template-columns: minmax(0, 1fr); } }
 
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+         padding: 18px; min-width: 0; }
+.riddle-panel { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.riddle-panel::-webkit-scrollbar { width: 5px; }
+.riddle-panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .tag { font-size: 9px; text-transform: uppercase; letter-spacing: 1.8px; color: var(--muted); }
 
 blockquote {
-    font-family: var(--serif); font-size: 21px; line-height: 1.45;
-    padding: 14px 0 16px; border-left: 2px solid var(--pink); padding-left: 15px; color: #ffeaf5;
+    font-family: var(--serif); font-size: 19px; line-height: 1.38;
+    padding: 10px 0 12px; border-left: 2px solid var(--pink); padding-left: 15px; color: #ffeaf5;
 }
 
 .guess-row { display: flex; gap: 8px; margin-top: 6px; }
@@ -101,20 +114,20 @@ blockquote {
 .guess-result.ok { color: var(--lime); }
 .guess-result.no { color: var(--muted); }
 
-.divider { height: 1px; background: var(--line-soft); margin: 20px 0; }
+.divider { height: 1px; background: var(--line-soft); margin: 14px 0; }
 
-.bet-list { max-height: 168px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.bet-list { max-height: 132px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .bet-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 7px 10px; background: rgba(255, 94, 168, 0.08); border-radius: 7px; }
 .bet-row b { color: var(--pink-soft); }
 .bet-row button { background: none; border: none; color: var(--muted); cursor: pointer; font-family: var(--mono); }
 .muted { color: var(--muted); font-size: 11px; }
 
-.stake-row { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+.stake-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
 .stake-row label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); }
 .stepper { display: flex; align-items: center; gap: 10px; }
 .stepper span { min-width: 34px; text-align: center; font-weight: 800; }
 
-.totals { display: flex; gap: 12px; margin: 16px 0 14px; }
+.totals { display: flex; gap: 10px; margin: 12px 0 12px; }
 .totals > div { flex: 1; background: rgba(0, 0, 0, 0.3); border-radius: 9px; padding: 10px 12px; }
 .totals label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); }
 .totals span { font-size: 17px; font-weight: 800; }
@@ -139,8 +152,9 @@ button { font-family: var(--mono); cursor: pointer; }
 .ghost:hover { border-color: var(--pink); color: var(--pink); }
 
 /* ───────────────────────── board ───────────────────────── */
-.board { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; min-width: 0; }
-.board-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; }
+.board { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+         padding: 16px; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.board-head { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
 .price-now label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--muted); }
 .price-now span { font-size: 27px; font-weight: 800; }
 .legend { font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
@@ -148,7 +162,7 @@ button { font-family: var(--mono); cursor: pointer; }
 .dot.visible { background: var(--pink); }
 .dot.future { background: rgba(255, 255, 255, 0.2); margin-left: 10px; }
 
-.canvas-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 340px; }
+.canvas-wrap { position: relative; width: 100%; flex: 1 1 auto; min-height: 0; }
 #chart { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; }
 
 .grid-overlay { position: absolute; top: 0; right: 0; bottom: 0; width: 58%; display: grid; }
@@ -192,7 +206,7 @@ button { font-family: var(--mono); cursor: pointer; }
     .brand { font-size: 22px; }
     .panel, .board { padding: 14px; }
     blockquote { font-size: 17px; padding-left: 11px; }
-    .canvas-wrap { min-height: 300px; aspect-ratio: 4 / 3; }
+    .canvas-wrap { min-height: 240px; }
     .grid-overlay { width: 64%; }
     .cell { font-size: 8px; }
     .price-now span { font-size: 21px; }
@@ -252,3 +266,19 @@ button { font-family: var(--mono); cursor: pointer; }
 .totals .win.over { color: var(--red); }
 .cell.unaffordable { opacity: 0.28; }
 .cell.unaffordable:hover { background: rgba(255,92,92,0.12); border-color: var(--red); color: var(--red); }
+
+/* ───────────────── reveal indicators ─────────────────
+   Three distinct states. Green means YOUR bet won — never anything else. */
+.cell.landed { border-color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.07); color: var(--ink); }
+.cell.won  { background: var(--lime); color: #16240a; border-color: var(--lime); font-weight: 800;
+             animation: pop 0.4s ease; box-shadow: 0 0 18px rgba(200,255,77,0.5); }
+.cell.lost { background: rgba(255,92,92,0.16); border-color: rgba(255,92,92,0.5); color: var(--red); }
+.cell.lost .cell-badge { text-decoration: line-through; opacity: 0.85; }
+.cell-badge { font-size: 10px; font-weight: 800; }
+
+.running-wrap { text-align: right; }
+.running-wrap label { display: block; font-size: 9px; text-transform: uppercase;
+                      letter-spacing: 1.6px; color: var(--muted); }
+.running { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--muted); }
+.running.up { color: var(--lime); }
+.running.down { color: var(--red); }
