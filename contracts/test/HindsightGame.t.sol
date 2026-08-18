@@ -128,127 +128,191 @@ contract HindsightGameTest is Test {
         assertFalse(registry.verifyCandle(windowId, index + 1, bn, sp, proof), "tampered index must fail");
     }
 
+    // ----------------------------------------------------- credit + deal
+
+    function _deposit(address who, uint256 amt) internal {
+        vm.deal(who, amt);
+        vm.prank(who);
+        game.deposit{value: amt}();
+    }
+
+    function _dealRound(address who, uint128 ante) internal returns (uint256 roundId) {
+        vm.prank(who);
+        (roundId,) = game.startRound(ante);
+    }
+
+    function _cells(uint8 t, uint8 p, uint128 amt)
+        internal
+        pure
+        returns (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts)
+    {
+        ts = new uint8[](1); ps = new uint8[](1); amts = new uint128[](1);
+        ts[0] = t; ps[0] = p; amts[0] = amt;
+    }
+
+    function test_DepositAndWithdraw() public {
+        _deposit(PLAYER, 5 ether);
+        assertEq(game.balances(PLAYER), 5 ether);
+
+        uint256 before = PLAYER.balance;
+        vm.prank(PLAYER);
+        game.withdraw(2 ether);
+        assertEq(game.balances(PLAYER), 3 ether);
+        assertEq(PLAYER.balance - before, 2 ether);
+    }
+
+    /// The ante must land BEFORE the window is known — that is what makes "pay to look" real.
+    function test_StartRoundAssignsWindowAndDebitsAnte() public {
+        _deposit(PLAYER, 5 ether);
+
+        vm.prank(PLAYER);
+        (uint256 roundId, bytes32 assigned) = game.startRound(0.1 ether);
+
+        assertEq(assigned, windowId, "only one window registered, so it must be dealt");
+        assertEq(game.balances(PLAYER), 5 ether - 0.1 ether, "ante debited");
+
+        (address player, bytes32 w, uint8 state, uint128 ante) = _round(roundId);
+        assertEq(player, PLAYER);
+        assertEq(w, windowId);
+        assertEq(state, uint8(1), "Dealt");
+        assertEq(ante, 0.1 ether);
+    }
+
+    function _round(uint256 id) internal view returns (address, bytes32, uint8, uint128) {
+        (address player, bytes32 w, GridGame.RoundState st, uint128 ante,,) = game.roundSummary(id);
+        return (player, w, uint8(st), ante);
+    }
+
+    function test_RevertsWhenAnteExceedsBalance() public {
+        _deposit(PLAYER, 0.01 ether);
+        vm.prank(PLAYER);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.InsufficientBalance.selector, 0.1 ether, 0.01 ether));
+        game.startRound(0.1 ether);
+    }
+
     // --------------------------------------------------------- round flow
 
     function test_WinningBetPaysMultiplier() public {
-        uint8 t = 0;
-        uint8 winning = uint8(uint256(expectedBands[0]));
-        uint128 stake = 0.01 ether;
+        _deposit(PLAYER, 5 ether);
+        uint128 ante = 0.01 ether;
+        uint256 roundId = _dealRound(PLAYER, ante);
 
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = t;
-        ps[0] = winning;
-        amts[0] = stake;
+        uint8 winning = uint8(uint256(expectedBands[0]));
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, winning, ante);
 
         vm.prank(PLAYER);
-        uint256 roundId = game.openRound{value: stake}(windowId, ts, ps, amts);
+        game.settleRound(roundId, ts, ps, amts);
 
-        uint32 mult = registry.multiplierAt(windowId, t, winning);
-        uint256 expectedPayout = (uint256(stake) * mult) / game.MULT_SCALE();
+        uint32 mult = registry.multiplierAt(windowId, 0, winning);
+        uint256 expectedPayout = (uint256(ante) * mult) / game.MULT_SCALE();
 
-        uint256 before = PLAYER.balance;
+        uint256 before = game.balances(PLAYER);
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
         game.resolveRound(roundId, idx, bns, sps, prs);
 
-        assertEq(PLAYER.balance - before, expectedPayout, "payout must equal stake * multiplier");
-        console.log("stake %s -> payout %s at %sx", stake, expectedPayout, uint256(mult) / 100);
+        assertEq(game.balances(PLAYER) - before, expectedPayout, "payout credited to balance");
+        console.log("ante %s -> payout %s", ante, expectedPayout);
     }
 
     function test_LosingBetPaysNothing() public {
-        // pick a band the path definitely does not visit at t=0
+        _deposit(PLAYER, 5 ether);
+        uint128 ante = 0.01 ether;
+        uint256 roundId = _dealRound(PLAYER, ante);
+
         uint8 losing = uint8(uint256(expectedBands[0])) == 0 ? 1 : 0;
-        uint128 stake = 0.01 ether;
-
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0;
-        ps[0] = losing;
-        amts[0] = stake;
-
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, losing, ante);
         vm.prank(PLAYER);
-        uint256 roundId = game.openRound{value: stake}(windowId, ts, ps, amts);
+        game.settleRound(roundId, ts, ps, amts);
 
-        uint256 before = PLAYER.balance;
+        uint256 before = game.balances(PLAYER);
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
         game.resolveRound(roundId, idx, bns, sps, prs);
-
-        assertEq(PLAYER.balance, before, "losing bet must pay nothing");
+        assertEq(game.balances(PLAYER), before, "losing bet pays nothing");
     }
 
-    function test_ResolveRejectsForgedCandle() public {
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0;
-        ps[0] = uint8(uint256(expectedBands[0]));
-        amts[0] = 0.01 ether;
+    // ------------------------------------------- the decision window
 
+    /// The countdown must be enforced on-chain, or it is decoration and a reverse-searcher
+    /// simply takes as long as they like.
+    function test_RevertsWhenDecisionWindowClosed() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
+
+        vm.roll(block.number + game.DECISION_BLOCKS() + 1);
+
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
         vm.prank(PLAYER);
-        uint256 roundId = game.openRound{value: 0.01 ether}(windowId, ts, ps, amts);
+        vm.expectRevert();
+        game.settleRound(roundId, ts, ps, amts);
+    }
 
-        (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
-        sps[0] = sps[0] + 1; // forge a price
+    function test_SettlesAtTheDeadline() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
 
-        vm.expectRevert(abi.encodeWithSelector(GridGame.BadCandleProof.selector, idx[0]));
-        game.resolveRound(roundId, idx, bns, sps, prs);
+        vm.roll(block.number + game.DECISION_BLOCKS()); // exactly on the deadline
+
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
+        vm.prank(PLAYER);
+        game.settleRound(roundId, ts, ps, amts);
+
+        (,, uint8 state,) = _round(roundId);
+        assertEq(state, uint8(2), "Settled");
+    }
+
+    /// Deal, look, walk away -> the ante is forfeit. This is what prices reverse-search.
+    function test_ExpiredRoundForfeitsAnte() public {
+        _deposit(PLAYER, 5 ether);
+        uint128 ante = 0.05 ether;
+        uint256 balBefore = game.balances(PLAYER);
+        uint256 roundId = _dealRound(PLAYER, ante);
+
+        vm.roll(block.number + game.DECISION_BLOCKS() + 1);
+        game.expireRound(roundId); // permissionless
+
+        (,, uint8 state,) = _round(roundId);
+        assertEq(state, uint8(4), "Expired");
+        assertEq(game.balances(PLAYER), balBefore - ante, "ante not returned");
+    }
+
+    function test_CannotExpireBeforeDeadline() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
+        vm.expectRevert();
+        game.expireRound(roundId);
     }
 
     // ------------------------------------------------------ risk controls
 
-    function test_RejectsBetAboveDynamicLimit() public {
-        uint256 limit = game.maxBet();
-        uint128 tooBig = uint128(limit + 1);
+    /// Total stake must cover the ante, so the ante is a stake and not an extra fee.
+    function test_RevertsWhenStakeBelowAnte() public {
+        _deposit(PLAYER, 5 ether);
+        uint128 ante = 0.05 ether;
+        uint256 roundId = _dealRound(PLAYER, ante);
 
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0;
-        ps[0] = 0;
-        amts[0] = tooBig;
-
-        vm.deal(PLAYER, uint256(tooBig) + 1 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
         vm.prank(PLAYER);
-        vm.expectRevert(abi.encodeWithSelector(GridGame.BetTooLarge.selector, tooBig, limit));
-        game.openRound{value: tooBig}(windowId, ts, ps, amts);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.StakeBelowAnte.selector, uint256(0.01 ether), ante));
+        game.settleRound(roundId, ts, ps, amts);
     }
 
-    function test_RejectsExposureAboveRoundCap() public {
-        // stake the max bet on the highest-multiplier cell we can find
-        uint256 limit = game.maxBet();
-        uint8 bestT;
-        uint8 bestP;
-        uint32 bestMult;
-        for (uint8 t = 0; t < timeSteps; t++) {
-            for (uint8 p = 0; p < priceBands; p++) {
-                uint32 m = registry.multiplierAt(windowId, t, p);
-                if (m > bestMult) {
-                    bestMult = m;
-                    bestT = t;
-                    bestP = p;
-                }
-            }
-        }
+    /// NOTE: the ante joins the bankroll, so maxBet() grows slightly the moment a round is
+    /// dealt. The limit must therefore be read AFTER dealing, not before.
+    function test_RejectsBetAboveDynamicLimit() public {
+        _deposit(PLAYER, game.maxBet() * 3);
+        uint256 roundId = _dealRound(PLAYER, uint128(game.maxBet() / 2));
 
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = bestT;
-        ps[0] = bestP;
-        amts[0] = uint128(limit);
-
-        uint256 payout = (limit * bestMult) / game.MULT_SCALE();
-        vm.assume(payout > game.maxRoundExposure());
-
-        vm.deal(PLAYER, limit + 1 ether);
+        uint256 limit = game.maxBet(); // re-read: the ante moved it
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, uint128(limit + 1));
         vm.prank(PLAYER);
-        vm.expectRevert(abi.encodeWithSelector(GridGame.ExposureTooHigh.selector, payout, game.maxRoundExposure()));
-        game.openRound{value: limit}(windowId, ts, ps, amts);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.BetTooLarge.selector, limit + 1, limit));
+        game.settleRound(roundId, ts, ps, amts);
     }
 
     function test_RejectsDuplicateCells() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
+
         uint8[] memory ts = new uint8[](2);
         uint8[] memory ps = new uint8[](2);
         uint128[] memory amts = new uint128[](2);
@@ -257,76 +321,51 @@ contract HindsightGameTest is Test {
 
         vm.prank(PLAYER);
         vm.expectRevert(abi.encodeWithSelector(GridGame.DuplicateCell.selector, 1, 2));
-        game.openRound{value: 0.02 ether}(windowId, ts, ps, amts);
+        game.settleRound(roundId, ts, ps, amts);
     }
 
     function test_RejectsCellOutOfRange() public {
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = timeSteps; // one past the end
-        ps[0] = 0;
-        amts[0] = 0.01 ether;
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
 
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(timeSteps, 0, 0.01 ether);
         vm.prank(PLAYER);
         vm.expectRevert(abi.encodeWithSelector(GridGame.CellOutOfRange.selector, timeSteps, 0));
-        game.openRound{value: 0.01 ether}(windowId, ts, ps, amts);
+        game.settleRound(roundId, ts, ps, amts);
     }
 
-    function test_RejectsStakeMismatch() public {
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0; ps[0] = 0; amts[0] = 0.02 ether;
+    function test_OnlyPlayerCanSettle() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
 
-        vm.prank(PLAYER);
-        vm.expectRevert(abi.encodeWithSelector(GridGame.StakeMismatch.selector, 0.01 ether, 0.02 ether));
-        game.openRound{value: 0.01 ether}(windowId, ts, ps, amts);
-    }
-
-    function test_ReclaimAfterTimeout() public {
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0; ps[0] = 0; amts[0] = 0.05 ether;
-
-        vm.prank(PLAYER);
-        uint256 roundId = game.openRound{value: 0.05 ether}(windowId, ts, ps, amts);
-
-        vm.prank(PLAYER);
-        vm.expectRevert(GridGame.TooEarlyToReclaim.selector);
-        game.reclaim(roundId);
-
-        vm.warp(block.timestamp + game.ROUND_TIMEOUT() + 1);
-        uint256 before = PLAYER.balance;
-        vm.prank(PLAYER);
-        game.reclaim(roundId);
-        assertEq(PLAYER.balance - before, 0.05 ether, "stake must be refunded");
-    }
-
-    function test_OnlyPlayerCanReclaim() public {
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0; ps[0] = 0; amts[0] = 0.05 ether;
-
-        vm.prank(PLAYER);
-        uint256 roundId = game.openRound{value: 0.05 ether}(windowId, ts, ps, amts);
-
-        vm.warp(block.timestamp + game.ROUND_TIMEOUT() + 1);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
         vm.prank(ATTACKER);
         vm.expectRevert(GridGame.NotPlayer.selector);
-        game.reclaim(roundId);
+        game.settleRound(roundId, ts, ps, amts);
+    }
+
+    function test_ResolveRejectsForgedCandle() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) =
+            _cells(0, uint8(uint256(expectedBands[0])), 0.01 ether);
+        vm.prank(PLAYER);
+        game.settleRound(roundId, ts, ps, amts);
+
+        (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        sps[0] = sps[0] + 1;
+
+        vm.expectRevert(abi.encodeWithSelector(GridGame.BadCandleProof.selector, idx[0]));
+        game.resolveRound(roundId, idx, bns, sps, prs);
     }
 
     function test_CannotResolveTwice() public {
-        uint8[] memory ts = new uint8[](1);
-        uint8[] memory ps = new uint8[](1);
-        uint128[] memory amts = new uint128[](1);
-        ts[0] = 0; ps[0] = uint8(uint256(expectedBands[0])); amts[0] = 0.01 ether;
-
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) =
+            _cells(0, uint8(uint256(expectedBands[0])), 0.01 ether);
         vm.prank(PLAYER);
-        uint256 roundId = game.openRound{value: 0.01 ether}(windowId, ts, ps, amts);
+        game.settleRound(roundId, ts, ps, amts);
 
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
         game.resolveRound(roundId, idx, bns, sps, prs);

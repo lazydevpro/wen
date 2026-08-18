@@ -56,11 +56,35 @@ Full detail: **[docs/ATTESTCOIN_INTEGRATION.md](docs/ATTESTCOIN_INTEGRATION.md)*
 
 ## The game
 
+```
+connect wallet → deposit once → pick an ante → DEAL
+   └─ startRound() lands on-chain, assigning a RANDOM window
+      └─ only now is the chart drawn — 45s on the clock
+         └─ place bets → settleRound() → resolveRound() → reveal
+```
+
+- You are **never shown the catalogue**. A window is picked on-chain and you cannot know which
+  until the ante transaction lands.
 - **Visible 20%** of a ~10-day window is drawn; the rest is hidden.
 - **A grid of (time × price) cells** sits over the future, each printed with its multiplier.
 - **Multipliers are computed from the visible candles only** — the odds cannot leak the hidden path.
-- **Guess the era** for a bonus.
 - The chart plays forward; cells the real price path crosses pay out.
+
+### Why two transactions
+
+The ante has to confirm **before** the chart appears. Otherwise a player deals, reverse-searches
+the candle series against public price history, and walks away for free — the exact attack this
+design exists to price. The ante is not a fee: it counts toward your stake, so an honest player
+pays nothing extra. Deal and walk away and it is forfeit.
+
+`DECISION_BLOCKS = 8` (~2 min) enforces the countdown on-chain. That budget covers the deal
+confirming, the 45s client clock, and the settle being mined — it is not just thinking time.
+
+### One constraint worth knowing
+
+The per-round exposure cap (bankroll ÷ 50) applies to the **worst case where every cell hits**.
+A 250× cell can therefore only carry `cap / 250` CTC — which can be *less than the ante*, forcing
+bets to be spread rather than concentrated. The UI surfaces this before you can hit the revert.
 
 ## House edge — and the bug worth reading about
 

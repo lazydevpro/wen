@@ -1,5 +1,11 @@
 {
   "id": "gas-crisis-2021",
+  "eraLabel": "May 2021 — peak gas",
+  "answers": [
+    "2021",
+    "may 2021",
+    "gas"
+  ],
   "hidden": [
     {
       "t": 0,
@@ -9,7 +15,15 @@
       "h": 2835.508419,
       "l": 2818.914431,
       "c": 2818.914431,
-      "sqrtPriceX96": "1492239862735027260091254622000821"
+      "sqrtPriceX96": "1492239862735027260091254622000821",
+      "proof": [
+        "0xb3e868d6f2bec78b54b469f7556ccf56fe5c53520a0beb67ca159ad73427c5f5",
+        "0x4de54f0159018d842f9447f40f76dae05a9b8e2b33d9c09c2b1e857ea7f30903",
+        "0xb5915377f5ea08f9539a2c5dac1ea5ec94255609f4463f49857b93a89e91e724",
+        "0x92f541788b9d8225cc66a1af8494fbea8fd6098779c08b62597a56d689e50d5e",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 1,
@@ -19,7 +33,15 @@
       "h": 2696.200336,
       "l": 2694.917826,
       "c": 2696.200336,
-      "sqrtPriceX96": "1525820707038442119102691314601330"
+      "sqrtPriceX96": "1525820707038442119102691314601330",
+      "proof": [
+        "0x4da84889cbc73f7e730d7f716f2e26c0ee6b2ed7be4f6ec5ef90699d0b8eba42",
+        "0x3b6409f6e70d6fab538d7eb1ed9b7c2bab3e79bfc3020544c02709b812a00821",
+        "0x419a5e76dfa64b0865c8469e2564c1a5d65a856f7d8f9f0576c45bb0bde9cfa0",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 2,
@@ -29,7 +51,15 @@
       "h": 2806.423788,
       "l": 2800.49342,
       "c": 2800.49342,
-      "sqrtPriceX96": "1497139626291135976074441765088332"
+      "sqrtPriceX96": "1497139626291135976074441765088332",
+      "proof": [
+        "0xf5967c4ac2670a983c8e64cb52f3f41deba9b9817090106f84a136ed23257a5e",
+        "0x3b6409f6e70d6fab538d7eb1ed9b7c2bab3e79bfc3020544c02709b812a00821",
+        "0x419a5e76dfa64b0865c8469e2564c1a5d65a856f7d8f9f0576c45bb0bde9cfa0",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 3,
@@ -39,7 +69,15 @@
       "h": 2788.377255,
       "l": 2788.377255,
       "c": 2788.377255,
-      "sqrtPriceX96": "1500388815128740996000785615406012"
+      "sqrtPriceX96": "1500388815128740996000785615406012",
+      "proof": [
+        "0x7e4456d3e8e0d4b59845bf8e793784b1331bc5035f20acfcadeafacca8bbd3f6",
+        "0x99ebf8c98298c83ba9607bca1abfd581af7f33d00dcf747f98f8f8edbd2febc3",
+        "0x419a5e76dfa64b0865c8469e2564c1a5d65a856f7d8f9f0576c45bb0bde9cfa0",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 4,
@@ -49,7 +87,15 @@
       "h": 2685.552025,
       "l": 2685.552025,
       "c": 2685.552025,
-      "sqrtPriceX96": "1528842681745147675905666842186497"
+      "sqrtPriceX96": "1528842681745147675905666842186497",
+      "proof": [
+        "0x2f2866c34dd22fd6d06d79ad93a9fa6af4a6fbc3015c97b88866b887804c1f62",
+        "0x99ebf8c98298c83ba9607bca1abfd581af7f33d00dcf747f98f8f8edbd2febc3",
+        "0x419a5e76dfa64b0865c8469e2564c1a5d65a856f7d8f9f0576c45bb0bde9cfa0",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 5,
@@ -59,7 +105,15 @@
       "h": 2549.140954,
       "l": 2549.140954,
       "c": 2549.140954,
-      "sqrtPriceX96": "1569215750491008601764880482665402"
+      "sqrtPriceX96": "1569215750491008601764880482665402",
+      "proof": [
+        "0x4cbca601efbe25f8e75914cb68b318a9d2e23830cc01cd7ce336abac4b159c3f",
+        "0xa25f163494d8cd6f2d21cd163ca999ff1340a6f9618ff3c3f5b6288d4cb8584d",
+        "0x5b1db8c2471f6442554105299b66e0e9382131bceaea726047682bb360205a07",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 6,
@@ -69,7 +123,15 @@
       "h": 2363.91292,
       "l": 2311.2904,
       "c": 2317.272227,
-      "sqrtPriceX96": "1645853045536388426429629649696551"
+      "sqrtPriceX96": "1645853045536388426429629649696551",
+      "proof": [
+        "0xf982174468bff56666e064f1196ed106a45556dfe3903d1cef1db299c86fa9cf",
+        "0xa25f163494d8cd6f2d21cd163ca999ff1340a6f9618ff3c3f5b6288d4cb8584d",
+        "0x5b1db8c2471f6442554105299b66e0e9382131bceaea726047682bb360205a07",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     },
     {
       "t": 7,
@@ -79,7 +141,15 @@
       "h": 2521.751237,
       "l": 2521.751237,
       "c": 2521.751237,
-      "sqrtPriceX96": "1577714665368428811573190299273601"
+      "sqrtPriceX96": "1577714665368428811573190299273601",
+      "proof": [
+        "0x03514d4e3da0f02a582275ee7ad9b54950e4efec2c0e16cae2d785122cbfc761",
+        "0x61d2988fc2ec3916f608d1b298be270a7edf44c3bdca7983ba09606d446ef87b",
+        "0x5b1db8c2471f6442554105299b66e0e9382131bceaea726047682bb360205a07",
+        "0xeccb5594ffc4dec070feacdd5d4ede0e577ee995d1da98044ede5b732e9e6aec",
+        "0x112feed22b042a46cc8207be80d93c4202c600bd7f4b8f31cfb8fa1dd7a64e82",
+        "0xaa6dea29dfdf293e1008e79dbec18224fd7f496da50b1eb4bc91d9fb32167c66"
+      ]
     }
   ],
   "outcome": [

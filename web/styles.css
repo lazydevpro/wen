@@ -17,6 +17,8 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; min-width: 0; }
+/* the hidden attribute loses to display:flex/grid without this */
+[hidden] { display: none !important; }
 
 body {
     background:
@@ -41,7 +43,7 @@ body {
 }
 .brand { font-family: var(--serif); font-size: 27px; letter-spacing: 0.5px; }
 .brand-mark { color: var(--pink); margin-right: 6px; }
-.topbar-right { display: flex; gap: 26px; }
+.topbar-right { display: flex; gap: 16px; align-items: center; }
 .stat { display: flex; flex-direction: column; align-items: flex-end; }
 .stat label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.6px; color: var(--muted); }
 .stat span { font-size: 16px; font-weight: 800; }
@@ -210,3 +212,41 @@ button { font-family: var(--mono); cursor: pointer; }
 .lb li b { color: var(--lime); }
 .lb li.you { border: 1px solid var(--pink); }
 .lb .empty { color: var(--muted); font-size: 11px; padding: 8px 2px; }
+
+/* ───────────────────────── wallet / lobby ───────────────────────── */
+.addr { font-size: 12px; color: var(--pink-soft); background: rgba(255,94,168,0.1);
+        border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; }
+.wide { width: 100%; margin-top: 22px; }
+.wide-sm { width: 100%; margin-top: 8px; }
+.center { text-align: center; }
+.sub.small { font-size: 11.5px; opacity: 0.75; margin-top: 10px; }
+
+.lobby { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 840px; margin: 40px auto; }
+@media (max-width: 780px) { .lobby { grid-template-columns: 1fr; } }
+.deposit-panel.needs-funds { border-color: var(--pink); box-shadow: 0 0 0 1px rgba(255,94,168,0.25); }
+
+.ante-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 4px; }
+.ante-chip { background: rgba(0,0,0,0.3); border: 1px solid var(--line); border-radius: 10px;
+             padding: 14px 4px; color: var(--ink); display: flex; flex-direction: column;
+             align-items: center; gap: 2px; transition: 0.15s; }
+.ante-chip b { font-size: 17px; }
+.ante-chip em { font-style: normal; font-size: 9px; color: var(--muted); }
+.ante-chip:hover { border-color: var(--pink); }
+.ante-chip.on { background: rgba(255,94,168,0.2); border-color: var(--pink); }
+
+/* ───────────────────────── clock ───────────────────────── */
+.clock { font-size: 22px; font-weight: 800; min-width: 44px; text-align: right;
+         color: var(--lime); font-variant-numeric: tabular-nums; }
+.clock.urgent { color: var(--red); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ───────────────────────── deal veil ───────────────────────── */
+.deal-veil { position: absolute; inset: 0; border-radius: 10px; display: none;
+             flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+             background: rgba(10,7,16,0.93); backdrop-filter: blur(8px); z-index: 5; }
+.deal-veil.on { display: flex; }
+.deal-veil p { font-size: 12px; color: var(--muted); }
+.spinner { width: 34px; height: 34px; border: 2px solid rgba(255,94,168,0.2);
+           border-top-color: var(--pink); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.totals .win.over { color: var(--red); }

@@ -10,7 +10,7 @@
  */
 import {readFileSync, readdirSync, writeFileSync, mkdirSync} from 'node:fs';
 import {keccak256, toUtf8Bytes} from 'ethers';
-import {GRID_TIME_STEPS} from './lib/window.js';
+import {GRID_TIME_STEPS, buildMerkle, candleLeaf, merkleProof} from './lib/window.js';
 
 const SRC = new URL('../data/windows/', import.meta.url).pathname;
 const OUT = new URL('../../web/data/', import.meta.url).pathname;
@@ -28,9 +28,7 @@ for (const f of files) {
     index.push({
         id: w.id,
         windowId: keccak256(toUtf8Bytes(w.id)),
-        eraLabel: w.era.label,
         riddle: w.era.riddle,
-        answers: w.era.answers,
         poolLabel: w.pool.label,
         anchorPrice: w.anchorPrice,
         bandHeight: w.bandHeight,
@@ -47,11 +45,17 @@ for (const f of files) {
         grid: w.grid.map((c: any) => ({t: c.t, p: c.p, m: c.multiplier})),
     });
 
+    // Merkle proofs so the client can resolve the round on-chain itself.
+    const candles = w.candles.map((c: any) => ({...c, sqrtPriceX96: BigInt(c.sqrtPriceX96)}));
+    const {layers} = buildMerkle(candles.map(candleLeaf));
+
     writeFileSync(
         `${OUT}${w.id}.reveal.json`,
         JSON.stringify(
             {
                 id: w.id,
+                eraLabel: w.era.label,
+                answers: w.era.answers,
                 hidden: hidden.map((c: any, t: number) => ({
                     t,
                     index: c.index,
@@ -60,7 +64,8 @@ for (const f of files) {
                     h: c.high,
                     l: c.low,
                     c: c.close,
-                    sqrtPriceX96: c.sqrtPriceX96,
+                    sqrtPriceX96: String(c.sqrtPriceX96),
+                    proof: merkleProof(layers, c.index),
                 })),
                 outcome: w.outcome,
             },

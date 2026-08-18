@@ -14,7 +14,8 @@
     "export-public": "tsx src/export-public.ts",
     "simulate": "tsx src/simulate.ts",
     "prove-candles": "tsx src/prove-candles.ts",
-    "verify-onchain": "tsx src/verify-onchain.ts"
+    "verify-onchain": "tsx src/verify-onchain.ts",
+    "play-round": "tsx src/play-round.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",

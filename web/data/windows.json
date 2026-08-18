@@ -2,14 +2,7 @@
   {
     "id": "etf-2024",
     "windowId": "0x79810988f4ceb84a90dde850d7cd77ba6416fe9b950e3d27543b1be9a6075dc9",
-    "eraLabel": "March 2024 — the ETF era",
     "riddle": "Wall Street finally got a wrapper it was allowed to buy.",
-    "answers": [
-      "2024",
-      "mar 2024",
-      "march 2024",
-      "etf"
-    ],
     "poolLabel": "USDC/WETH 0.05%",
     "anchorPrice": 4034.71388,
     "bandHeight": 0.011806517089081973,
@@ -560,16 +553,7 @@
   {
     "id": "ftx-2022",
     "windowId": "0xf3a60c24333d309084029a5f537785cfb85c3ecc59d264bb69719f0ef3c49b3d",
-    "eraLabel": "November 2022 — FTX collapses",
     "riddle": "An exchange everyone trusted turned out to be holding nothing at all.",
-    "answers": [
-      "2022",
-      "nov 2022",
-      "november 2022",
-      "ftx",
-      "sbf",
-      "alameda"
-    ],
     "poolLabel": "USDC/WETH 0.05%",
     "anchorPrice": 1222.861532,
     "bandHeight": 0.008971502988046434,
@@ -1120,13 +1104,7 @@
   {
     "id": "gas-crisis-2021",
     "windowId": "0xa24a8b1d2c7f201643d3b2a5854f1644d30a50999303b3ff2c0b048e87ef117d",
-    "eraLabel": "May 2021 — peak gas",
     "riddle": "The chain worked fine. Everyone just stopped being able to afford it.",
-    "answers": [
-      "2021",
-      "may 2021",
-      "gas"
-    ],
     "poolLabel": "USDC/WETH 0.05%",
     "anchorPrice": 2747.477224,
     "bandHeight": 0.035781569176228906,
@@ -1670,15 +1648,7 @@
   {
     "id": "luna-2022",
     "windowId": "0x92ac83e5244b5ef293e78aee51ac614fe1a02b7baa12e87d180c2af648e8ca28",
-    "eraLabel": "May 2022 — Luna collapses",
     "riddle": "Something that promised to always be worth a dollar stopped being worth a dollar.",
-    "answers": [
-      "2022",
-      "may 2022",
-      "luna",
-      "terra",
-      "ust"
-    ],
     "poolLabel": "USDC/WETH 0.05%",
     "anchorPrice": 2141.41127,
     "bandHeight": 0.014559061857458899,
@@ -2229,15 +2199,7 @@
   {
     "id": "merge-2022",
     "windowId": "0xd05a770b509fc6b886199c5dde3dc84de10f328c29cbab24af90d773aac33bce",
-    "eraLabel": "September 2022 — the Merge",
     "riddle": "The way blocks got made changed forever, and the price barely noticed.",
-    "answers": [
-      "2022",
-      "sep 2022",
-      "september 2022",
-      "merge",
-      "pos"
-    ],
     "poolLabel": "USDC/WETH 0.05%",
     "anchorPrice": 1439.388408,
     "bandHeight": 0.01318357671024156,
@@ -2788,14 +2750,7 @@
   {
     "id": "pre-ath-2021",
     "windowId": "0x094d998639f40bd4fb6467da30219d75b7fc3d56c58dc6f01c20e0364cc8a77b",
-    "eraLabel": "October 2021 — the run to the all-time high",
     "riddle": "Everything was going up, and everyone had already decided it would keep going up.",
-    "answers": [
-      "2021",
-      "oct 2021",
-      "october 2021",
-      "bull"
-    ],
     "poolLabel": "USDC/WETH 0.05%",
     "anchorPrice": 3010.968855,
     "bandHeight": 0.0178931030818828,

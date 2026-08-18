@@ -14,21 +14,57 @@
 <header class="topbar">
   <div class="brand"><span class="brand-mark">◷</span> hindsight</div>
   <div class="topbar-right">
-    <div class="stat"><label>era</label><span id="eraChip">—</span></div>
-    <div class="stat"><label>balance</label><span id="balance">1000</span><em>pts</em></div>
+    <div class="stat" id="creditStat" hidden><label>credit</label><span id="credit">0</span><em>CTC</em></div>
+    <button id="btnConnect" class="ghost">connect wallet</button>
+    <div class="addr" id="addr" hidden></div>
   </div>
 </header>
 
-<!-- ─────────────────────────── era select ─────────────────────────── -->
-<section id="screenSelect" class="screen active">
+<!-- ─────────────────────────── connect ─────────────────────────── -->
+<section id="screenConnect" class="screen active">
   <div class="hero">
     <h1>Somewhere in Ethereum's past,<br /><i>this actually happened.</i></h1>
     <p class="sub">
-      Every candle is a real Uniswap swap, cryptographically proven onto Creditcoin.
-      Work out <em>when</em> you are, then bet on what came next.
+      You'll be dealt a random slice of real Ethereum price history — but not told when it is.
+      A riddle is your only clue. Read the chart, work out <em>when</em> you are,
+      then bet on what came next.
     </p>
+    <p class="sub small">
+      Every candle is a real Uniswap swap, cryptographically proven onto Creditcoin.
+      Nothing here is simulated.
+    </p>
+    <button id="btnConnectBig" class="primary wide">connect wallet to play</button>
+    <p class="fineprint center" id="netHint">Creditcoin CC3 Testnet · testnet CTC only, no real value</p>
   </div>
-  <div id="windowGrid" class="window-grid"></div>
+</section>
+
+<!-- ─────────────────────────── lobby / ante ─────────────────────────── -->
+<section id="screenLobby" class="screen">
+  <div class="lobby">
+    <div class="panel deposit-panel" id="depositPanel">
+      <div class="panel-head"><span class="tag">table credit</span></div>
+      <p class="muted">Deposit once, then play as many hands as you like without signing a transfer each time.</p>
+      <div class="guess-row">
+        <input id="depositInput" type="number" min="0.1" step="0.1" value="20" />
+        <button id="btnDeposit" class="ghost">deposit</button>
+      </div>
+      <button id="btnWithdraw" class="ghost wide-sm">withdraw all</button>
+    </div>
+
+    <div class="panel ante-panel">
+      <div class="panel-head"><span class="tag">ante up</span></div>
+      <p class="muted">
+        Your ante is your <strong>minimum stake</strong>, not a fee — it counts toward your bets.
+        The chart is dealt only once the ante lands on-chain.
+      </p>
+      <div class="ante-grid" id="anteGrid"></div>
+      <button id="btnDeal" class="primary wide" disabled>deal me a chart</button>
+      <p class="fineprint">
+        Once dealt you have <strong id="decisionHint">45 seconds</strong> to place your bets.
+        Walk away and the ante is forfeit — that is what stops anyone looking the chart up.
+      </p>
+    </div>
+  </div>
 </section>
 
 <!-- ─────────────────────────── play ─────────────────────────── -->
@@ -38,11 +74,11 @@
     <aside class="panel riddle-panel">
       <div class="panel-head">
         <span class="tag">the riddle</span>
-        <button id="btnBack" class="ghost">← eras</button>
+        <div class="clock" id="clock">45</div>
       </div>
       <blockquote id="riddleText">…</blockquote>
       <div class="guess-row">
-        <input id="guessInput" placeholder="which year? e.g. 2022" autocomplete="off" spellcheck="false" />
+        <input id="guessInput" placeholder="which year?" autocomplete="off" spellcheck="false" inputmode="numeric" />
         <button id="btnGuess" class="ghost">guess</button>
       </div>
       <div id="guessResult" class="guess-result"></div>
@@ -55,7 +91,7 @@
         <label>stake / cell</label>
         <div class="stepper">
           <button data-stake="-" class="ghost">−</button>
-          <span id="stakeValue">10</span>
+          <span id="stakeValue">1</span>
           <button data-stake="+" class="ghost">+</button>
         </div>
       </div>
@@ -63,9 +99,9 @@
         <div><label>staked</label><span id="totalStaked">0</span></div>
         <div><label>max win</label><span id="maxWin" class="win">0</span></div>
       </div>
-      <button id="btnPlay" class="primary" disabled>place bets & reveal</button>
+      <button id="btnLockIn" class="primary" disabled>lock in bets</button>
       <p class="fineprint">
-        Multipliers are computed from the <strong>visible</strong> candles only —
+        Multipliers come from the <strong>visible</strong> candles only —
         the odds cannot leak the hidden path.
       </p>
     </aside>
@@ -85,6 +121,7 @@
         <!-- chart is drawn as pixels; no numeric series exists in the DOM -->
         <canvas id="chart"></canvas>
         <div id="gridOverlay" class="grid-overlay"></div>
+        <div id="dealVeil" class="deal-veil"><div class="spinner"></div><p id="veilText">waiting for the deal…</p></div>
       </div>
     </main>
   </div>
@@ -98,10 +135,10 @@
     <p id="resultEra" class="result-era"></p>
     <div id="resultBreakdown" class="breakdown"></div>
     <div class="result-actions">
-      <button id="btnAgain" class="primary">play another era</button>
+      <button id="btnAgain" class="primary">deal another</button>
     </div>
     <div class="lb">
-      <div class="tag">best runs</div>
+      <div class="tag">best hands</div>
       <ol id="leaderboard"></ol>
     </div>
   </div>
@@ -111,9 +148,9 @@
 
 <script>
 window.__errs = [];
-window.addEventListener('error', e => window.__errs.push(e.message + ' @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno + ':' + e.colno));
-window.addEventListener('unhandledrejection', e => window.__errs.push('REJECT: ' + ((e.reason && e.reason.stack) || e.reason)));
+window.addEventListener('error', e => window.__errs.push(e.message + ' @ ' + (e.filename||'').split('/').pop() + ':' + e.lineno));
+window.addEventListener('unhandledrejection', e => window.__errs.push('REJECT: ' + ((e.reason && e.reason.message) || e.reason)));
 </script>
-<script src="app.js" type="module"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
