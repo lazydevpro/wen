@@ -41,6 +41,19 @@
 <!-- ─────────────────────────── lobby / ante ─────────────────────────── -->
 <section id="screenLobby" class="screen">
   <div class="lobby">
+    <div class="panel faucet-panel" id="faucetPanel">
+      <div class="panel-head">
+        <span class="tag">testnet faucet</span>
+        <span class="faucet-left" id="faucetLeft"></span>
+      </div>
+      <p class="muted">
+        No CTC? Grab some. <strong>20 CTC every 24h</strong> — enough for a few hands.
+        Gas is paid for you, so a brand-new wallet works.
+      </p>
+      <button id="btnFaucet" class="ghost wide-sm">send me 20 CTC</button>
+      <div id="faucetResult" class="guess-result"></div>
+    </div>
+
     <div class="panel deposit-panel" id="depositPanel">
       <div class="panel-head"><span class="tag">table credit</span></div>
       <p class="muted">Deposit once, then play as many hands as you like without signing a transfer each time.</p>

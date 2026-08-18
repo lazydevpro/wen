@@ -235,7 +235,8 @@ button { font-family: var(--mono); cursor: pointer; }
 .center { text-align: center; }
 .sub.small { font-size: 11.5px; opacity: 0.75; margin-top: 10px; }
 
-.lobby { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 840px; margin: 40px auto; }
+.lobby { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 880px; margin: 28px auto; }
+.lobby .faucet-panel { grid-column: 1 / -1; }
 @media (max-width: 780px) { .lobby { grid-template-columns: 1fr; } }
 .deposit-panel.needs-funds { border-color: var(--pink); box-shadow: 0 0 0 1px rgba(255,94,168,0.25); }
 
@@ -282,3 +283,10 @@ button { font-family: var(--mono); cursor: pointer; }
 .running { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--muted); }
 .running.up { color: var(--lime); }
 .running.down { color: var(--red); }
+
+/* ───────────────────────── faucet ───────────────────────── */
+.faucet-panel.dry { opacity: 0.6; }
+.faucet-left { font-size: 10px; color: var(--muted); }
+.faucet-result-ok { color: var(--lime); }
+.faucet-result-no { color: var(--red); }
+#faucetResult a { color: var(--pink-soft); }

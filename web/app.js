@@ -228,6 +228,7 @@ async function connect() {
     $('creditStat').hidden = false;
 
     await refreshCredit();
+    refreshFaucet();
     show('screenLobby');
 }
 
@@ -262,6 +263,65 @@ function renderAnteGrid() {
         g.appendChild(b);
     });
     $('decisionHint').textContent = `${DECISION_SECONDS} seconds`;
+}
+
+// ─────────────────────────────────────────────────────── faucet
+
+/** Invite code travels in the URL so the link can just be shared: ...?code=abc */
+const INVITE_CODE = new URLSearchParams(location.search).get('code') ?? '';
+
+async function refreshFaucet() {
+    try {
+        const q = state.address ? `?address=${state.address}` : '';
+        const s = await (await fetch(`/api/faucet/status${q}`)).json();
+        $('faucetLeft').textContent = `${Math.floor(Number(s.claimsRemaining))} drips left`;
+        $('faucetPanel').classList.toggle('dry', Number(s.claimsRemaining) < 1);
+
+        const btn = $('btnFaucet');
+        if (s.canClaim === false) {
+            // whole minutes first, else a countdown reads "23h 60m"
+            const totalMin = Math.ceil(s.cooldownSeconds / 60);
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            btn.disabled = true;
+            btn.textContent = `already claimed — ${h}h ${m}m to go`;
+        } else {
+            btn.disabled = false;
+            btn.textContent = `send me ${Number(s.drip)} CTC`;
+        }
+    } catch {
+        // faucet API not running (e.g. served as plain static files) — hide the card
+        $('faucetPanel').hidden = true;
+    }
+}
+
+async function claimFaucet() {
+    if (!state.address) return toast('connect your wallet first');
+    const btn = $('btnFaucet');
+    const out = $('faucetResult');
+    btn.disabled = true;
+    btn.textContent = 'sending…';
+    out.textContent = '';
+
+    try {
+        const r = await fetch('/api/faucet', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({address: state.address, code: INVITE_CODE}),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error ?? 'faucet failed');
+
+        out.className = 'guess-result faucet-result-ok';
+        out.innerHTML = `✓ sent ${d.amount} CTC — <a href="${d.explorer}" target="_blank" rel="noreferrer">view tx</a>`;
+        toast(`${d.amount} CTC on its way`);
+        await refreshCredit();
+    } catch (e) {
+        out.className = 'guess-result faucet-result-no';
+        out.textContent = '✗ ' + (e.message ?? e);
+    } finally {
+        refreshFaucet();
+    }
 }
 
 async function doDeposit() {
@@ -739,10 +799,11 @@ function wireControls() {
     $('btnConnect').onclick = connect;
     $('btnConnectBig').onclick = connect;
     $('btnDeposit').onclick = doDeposit;
+    $('btnFaucet').onclick = claimFaucet;
     $('btnWithdraw').onclick = doWithdraw;
     $('btnDeal').onclick = deal;
     $('btnLockIn').onclick = lockIn;
-    $('btnAgain').onclick = () => show('screenLobby');
+    $('btnAgain').onclick = () => { refreshFaucet(); show('screenLobby'); };
     $('btnGuess').onclick = checkGuess;
     $('guessInput').addEventListener('keydown', (e) => e.key === 'Enter' && checkGuess());
 

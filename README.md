@@ -145,11 +145,43 @@ pnpm --dir worker build-window all        # rebuild all six eras from Ethereum
 pnpm --dir worker simulate                # house-edge calibration
 pnpm --dir worker verify-onchain          # read candles back, compare to Ethereum
 
-cd web && python3 -m http.server 5173     # play it
+pnpm --dir worker serve                   # play it — http://localhost:5173
 ```
 
 An **archive-capable** Ethereum RPC is required — historical eras are unreachable otherwise. Free
 tiers work but cap `eth_getLogs` at a 10-block range, which the indexer chunks around.
+
+## The faucet
+
+`pnpm serve` hosts the client *and* a faucet from one process, so there is a single link to share.
+A new player needs nothing at all: **20 CTC per address per 24h**, and the server pays the gas.
+
+That last part is why this is a server and not a `Faucet.sol`. A brand-new wallet holds zero CTC,
+so it cannot pay gas to call a faucet contract — an on-chain faucet can only ever top up someone
+who is already funded. Moving it off-chain removes the bootstrap problem entirely.
+
+Share the link with the invite code appended; the client reads `?code=` and passes it through:
+
+```
+http://<host>:5173/?code=<FAUCET_CODE>
+```
+
+Guards, in the order that they actually matter:
+
+| Guard | Default | Stops |
+| --- | --- | --- |
+| `FAUCET_CODE` | required | randoms who find the URL |
+| per-address cooldown | 24h | one player draining it |
+| `FAUCET_DAILY_CAP` | 500 CTC | a bug or a spray emptying the wallet |
+| `FAUCET_IP_HOURLY` | 5 | trivial multi-address abuse |
+
+The cooldown ledger is persisted to `worker/data/faucet.json` (gitignored — it holds player
+addresses), so a restart does not hand everyone a fresh claim. A claim reserves its slot *before*
+the transfer is broadcast and hands it back if the send fails, so a slow confirmation cannot be
+raced into a double claim.
+
+Use a **dedicated** `FAUCET_PRIVATE_KEY`, never the deployer's — it is a hot key sitting in a web
+process, and it should not be able to touch the game bankroll if it leaks.
 
 ## Scope and honesty
 
