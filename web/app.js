@@ -117,8 +117,29 @@ const DECISION_SECONDS = 45;
  * the time, so paying both sides alike would let an always-up bot play at break-even.
  */
 const DIR_MULT = {up: 1.8, down: 2.0};
+
 const ANTES = [0.5, 1, 2, 5];
 const STAKES = [0.5, 1, 2, 5];
+
+/**
+ * Both panes show the stake, so writing one readout by hand desynced them the moment simple mode
+ * arrived. Everything that changes the stake goes through here: it updates both, and re-syncs —
+ * the stake decides which grid cells are unaffordable and what the direction bet is worth, so
+ * skipping that left stale limits on screen either way.
+ */
+function setStakeIdx(idx) {
+    state.stakeIdx = Math.max(0, Math.min(STAKES.length - 1, idx));
+    state.stake = STAKES[state.stakeIdx];
+    renderStake();
+    syncBets();
+}
+
+function renderStake() {
+    for (const id of ['stakeValue', 'stakeValueSimple']) {
+        const el = $(id);
+        if (el) el.textContent = state.stake;
+    }
+}
 
 /**
  * Where the round is, as one value.
@@ -339,7 +360,7 @@ function renderAnteGrid() {
             state.ante = a;
             state.stake = a;
             state.stakeIdx = STAKES.indexOf(a) >= 0 ? STAKES.indexOf(a) : 1;
-            $('stakeValue').textContent = state.stake;
+            renderStake();
             renderAnteGrid();
             refreshCredit();
         };
@@ -510,7 +531,7 @@ function openTable() {
     $('guessInput').value = '';
     $('guessResult').textContent = '';
     $('anchorPrice').textContent = '$' + w.anchorPrice.toLocaleString(undefined, {maximumFractionDigits: 2});
-    $('stakeValue').textContent = state.stake;
+    renderStake();
 
     buildGrid();
     $('modeGrid').classList.add('on');
@@ -658,7 +679,6 @@ function syncBets() {
 
 /** syncBets for the two-button game. Same limits, one bet. */
 function syncSimple() {
-    $('stakeValueSimple').textContent = state.stake;
     const mult = state.dir === null ? 0 : state.dir ? DIR_MULT.up : DIR_MULT.down;
     const staked = state.dir === null ? 0 : state.stake;
     const worst = staked * mult;
@@ -1041,11 +1061,7 @@ function wireControls() {
     $('guessInput').addEventListener('keydown', (e) => e.key === 'Enter' && checkGuess());
 
     document.querySelectorAll('[data-stake]').forEach((btn) => {
-        btn.onclick = () => {
-            state.stakeIdx = Math.max(0, Math.min(STAKES.length - 1, state.stakeIdx + (btn.dataset.stake === '+' ? 1 : -1)));
-            state.stake = STAKES[state.stakeIdx];
-            $('stakeValue').textContent = state.stake;
-        };
+        btn.onclick = () => setStakeIdx(state.stakeIdx + (btn.dataset.stake === '+' ? 1 : -1));
     });
 
     window.ethereum?.on?.('accountsChanged', () => location.reload());
