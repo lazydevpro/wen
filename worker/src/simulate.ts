@@ -33,7 +33,13 @@ const files = readdirSync(DIR).filter((f) => f.endsWith('.json'));
 for (const f of files) {
     const w = JSON.parse(readFileSync(DIR + f, 'utf8'));
     for (const o of w.outcome) {
-        if (o.p < 0) continue; // landed outside the grid
+        // A column whose price left the grid is not a column that did not happen — the bettor
+        // staked on it and lost every unit. Skipping these here silently dropped the house's
+        // best columns from the denominator and overstated RTP by ~20 points.
+        if (o.p < 0) {
+            rows.push({window: w.id, t: o.t, band: -1, modelProb: 0, multiplier: 0});
+            continue;
+        }
         const cell = w.grid.find((c: any) => c.t === o.t && c.p === o.p);
         rows.push({window: w.id, t: o.t, band: o.p, modelProb: cell.probability, multiplier: cell.multiplier});
     }
@@ -65,15 +71,19 @@ console.log(`   house edge  : ${((1 - totalReturned / totalStaked) * 100).toFixe
 // The width of the grid is the lever that broke the edge: too wide and the outer bands
 // never hit, so players buy unwinnable cells. Band coverage measures it directly.
 console.log('2. GRID COVERAGE (are the bands where prices actually go?)');
-const visited = new Set(rows.map((r) => r.band));
+// only real bands here — the -1 sentinel means "left the grid", which is not a band
+const landed = rows.filter((r) => r.band >= 0);
+const escaped = rows.length - landed.length;
+const visited = new Set(landed.map((r) => r.band));
 const hist = new Array(bandsPerColumn).fill(0);
-for (const r of rows) hist[r.band]++;
+for (const r of landed) hist[r.band]++;
 const peak = Math.max(...hist);
 for (let b = bandsPerColumn - 1; b >= 0; b--) {
     const bar = '█'.repeat(Math.round((hist[b] / peak) * 26));
     console.log(`   band ${String(b).padStart(2)} ${String(hist[b]).padStart(3)}  ${bar}`);
 }
 console.log(`   bands visited: ${visited.size}/${bandsPerColumn}`);
+console.log(`   columns where price LEFT the grid: ${escaped}/${rows.length} (a total loss for a uniform bettor)`);
 if (visited.size < bandsPerColumn * 0.5) {
     console.log('   ⚠️  grid too WIDE — outer bands unreachable, players buy unwinnable cells');
 } else if (visited.size === bandsPerColumn) {

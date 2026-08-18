@@ -1,5 +1,6 @@
 import {JsonRpcProvider, Interface, type Log} from 'ethers';
 import {LOG_CHUNK, SWAP_TOPIC, type PoolSpec} from './config.js';
+import {mapLimit} from './blocks.js';
 
 export const swapIface = new Interface([
     'event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)',
@@ -143,6 +144,73 @@ export async function sampleStratified(
         onProgress?.(i + 1, buckets, totalSwaps);
     }
     return out;
+}
+
+/**
+ * Concurrent sibling of sampleStratified, for generating a large window pool.
+ *
+ * Two things about the free Alchemy tier drove this shape, both learned the hard way:
+ *
+ *  1. It throttles by QUEUING, not by rejecting. Sustained load produces no 429 — requests just
+ *     hang, sometimes for minutes. So every call needs its own timeout; retrying is useless
+ *     against a request that will eventually succeed but far too late to be worth waiting for.
+ *  2. A swallowed error is indistinguishable from "no swaps in this range", which sends the
+ *     probe loop hunting outward and issues up to six times more requests. Under throttling that
+ *     is a feedback loop: slowness causes extra requests, which cause more slowness. Errors and
+ *     empty results are therefore handled separately — only a *successful* empty read probes on.
+ */
+async function getLogsOrTimeout(
+    eth: JsonRpcProvider,
+    pool: PoolSpec,
+    a: number,
+    b: number,
+    timeoutMs: number,
+): Promise<Log[] | null> {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+        return (await Promise.race([
+            eth.getLogs({address: pool.address, topics: [SWAP_TOPIC], fromBlock: a, toBlock: b}),
+            new Promise<never>((_, rej) => {
+                timer = setTimeout(() => rej(new Error('rpc timeout')), timeoutMs);
+            }),
+        ])) as Log[];
+    } catch {
+        return null; // timed out or errored — explicitly NOT "no swaps here"
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+export async function sampleStratifiedConcurrent(
+    eth: JsonRpcProvider,
+    pool: PoolSpec,
+    fromBlock: number,
+    spanBlocks: number,
+    buckets: number,
+    concurrency = 8,
+    timeoutMs = 12_000,
+): Promise<Bucket[]> {
+    const stride = Math.max(LOG_CHUNK, Math.floor(spanBlocks / buckets));
+    const indices = Array.from({length: buckets}, (_, i) => i);
+
+    const results = await mapLimit(indices, concurrency, async (i) => {
+        const base = fromBlock + i * stride;
+        for (let probe = 0; probe < 4; probe++) {
+            const a = base + probe * LOG_CHUNK;
+            const b = Math.min(a + LOG_CHUNK - 1, base + stride - 1);
+            if (a > b) break;
+
+            const logs = await getLogsOrTimeout(eth, pool, a, b, timeoutMs);
+            if (logs === null) return null; // give up on this bucket rather than amplify load
+            if (logs.length) {
+                return {index: i, fromBlock: base, toBlock: base + stride - 1, swaps: logs.map((l) => decodeSwap(l, pool))};
+            }
+            // genuinely empty — a thin stretch, so it is worth looking a little further along
+        }
+        return null;
+    });
+
+    return results.filter((b): b is Bucket => b !== null);
 }
 
 /**

@@ -1,43 +1,23 @@
 /**
  * Gated reveal data.
  *
- * The reveal files hold `eraLabel`, the accepted `answers`, and `hidden` — the future price path,
- * which is to say the winning band. Served as static assets they were one fetch away: `windows.json`
- * lists every window id, so `data/<id>.reveal.json` handed over the answer before a single bet was
- * placed. That is worse than the reverse-image-search the decision timer exists to prevent.
+ * A reveal holds `eraLabel`, the accepted `answers`, and `hidden` — the future price path, which
+ * is to say the winning band. These are bundled into the Worker (see reveals.generated.ts) and
+ * released only once the round asking for one is `Settled` on-chain, meaning the bets are
+ * committed and can no longer change.
  *
- * So they are bundled into the Worker instead of uploaded (see web/.assetsignore) and released only
- * once the round that asked for them is `Settled` on-chain — meaning the bets are already committed
- * and can no longer be changed.
+ * They deliberately live outside web/, so they are not in the directory that gets published at
+ * all. The previous arrangement kept them in the assets folder behind an .assetsignore rule,
+ * which was one editing mistake away from serving every answer as a static file.
  *
- * KNOWN RESIDUAL: there are only six windows. Settling six minimum rounds harvests the entire
- * catalogue, after which every future hand is known. The gate raises the cost from "free and
- * instant" to "six antes", but the actual fix is many more windows, not a cleverer gate.
+ * The old six-window pool made harvesting trivial: six minimum rounds bought the entire
+ * catalogue. At 120 non-overlapping windows that costs 120 settled rounds, and because the
+ * client is now served one window at a time by id, the pool cannot be enumerated to know what
+ * to harvest.
  */
 import {Contract, JsonRpcProvider} from 'ethers';
 import type {Env} from './index';
-
-import windows from '../../web/data/windows.json';
-import etf2024 from '../../web/data/etf-2024.reveal.json';
-import ftx2022 from '../../web/data/ftx-2022.reveal.json';
-import gasCrisis2021 from '../../web/data/gas-crisis-2021.reveal.json';
-import luna2022 from '../../web/data/luna-2022.reveal.json';
-import merge2022 from '../../web/data/merge-2022.reveal.json';
-import preAth2021 from '../../web/data/pre-ath-2021.reveal.json';
-
-const REVEALS: Record<string, unknown> = {
-    'etf-2024': etf2024,
-    'ftx-2022': ftx2022,
-    'gas-crisis-2021': gasCrisis2021,
-    'luna-2022': luna2022,
-    'merge-2022': merge2022,
-    'pre-ath-2021': preAth2021,
-};
-
-/** id -> the windowId the registry knows it by. */
-const WINDOW_IDS = new Map<string, string>(
-    (windows as Array<{id: string; windowId: string}>).map((w) => [w.id, w.windowId.toLowerCase()]),
-);
+import {REVEALS, REVEAL_COUNT} from './reveals.generated';
 
 const GAME_ABI = [
     'function rounds(uint256) view returns (address player, bytes32 windowId, uint8 state, uint64 startBlock, uint64 settledAt, uint128 ante, uint128 staked, uint128 paidOut)',
@@ -46,10 +26,12 @@ const GAME_ABI = [
 /** Round.state in GridGame.sol — bets are locked from Settled onward. */
 const STATE_SETTLED = 2;
 
-export async function handleReveal(env: Env, id: string, roundIdRaw: string | null) {
-    const reveal = REVEALS[id];
-    const windowId = WINDOW_IDS.get(id);
-    if (!reveal || !windowId) {
+export {REVEAL_COUNT};
+
+export async function handleReveal(env: Env, windowId: string, roundIdRaw: string | null) {
+    const key = windowId.toLowerCase();
+    const reveal = REVEALS[key];
+    if (!reveal) {
         return {status: 404, body: {error: 'unknown window'}};
     }
 
@@ -67,7 +49,7 @@ export async function handleReveal(env: Env, id: string, roundIdRaw: string | nu
     let round: any;
     try {
         round = await game.rounds(BigInt(roundIdRaw));
-    } catch (e: any) {
+    } catch {
         return {status: 502, body: {error: 'could not read the round on-chain'}};
     }
 
@@ -75,7 +57,7 @@ export async function handleReveal(env: Env, id: string, roundIdRaw: string | nu
         return {status: 403, body: {error: 'bets are not locked in yet'}};
     }
     // The round must actually be on the window whose answer is being asked for.
-    if (String(round.windowId).toLowerCase() !== windowId) {
+    if (String(round.windowId).toLowerCase() !== key) {
         return {status: 403, body: {error: 'that round was not dealt this window'}};
     }
 

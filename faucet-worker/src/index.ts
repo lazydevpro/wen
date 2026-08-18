@@ -72,7 +72,8 @@ export default {
             return json(status, body);
         }
 
-        const revealMatch = url.pathname.match(/^\/api\/reveal\/([a-z0-9-]+)$/);
+        // keyed by windowId (0x + 64 hex) — the client never sees window ids like "luna-2022-s3"
+        const revealMatch = url.pathname.match(/^\/api\/reveal\/(0x[0-9a-fA-F]{64})$/);
         if (revealMatch) {
             const {status, body} = await handleReveal(env, revealMatch[1], url.searchParams.get('roundId'));
             return json(status, body);

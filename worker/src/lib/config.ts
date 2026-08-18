@@ -65,61 +65,7 @@ export const POOLS: Record<string, PoolSpec> = {
 export const DEFAULT_POOL = POOLS['usdc-weth-005'];
 
 /**
- * Playable eras. On-chain price data only exists from ~2021 (Uniswap V3 launched May 2021),
- * so the genesis-era romance is unreachable — see docs/plans/spec.md.
- *
- * `riddle` names the era through what happened, never when.
+ * The era catalogue lives in ./eras.ts — re-exported here so existing imports keep working.
+ * Eras are anchored to dates rather than block numbers; call `blockForDate()` to resolve one.
  */
-export interface EraSpec {
-    id: string;
-    label: string;
-    startBlock: number;
-    riddle: string;
-    /** answer accepted for the era-guess bonus, lowercase substrings */
-    answers: string[];
-}
-
-export const ERAS: EraSpec[] = [
-    {
-        id: 'pre-ath-2021',
-        label: 'October 2021 — the run to the all-time high',
-        startBlock: 13_314_560,
-        riddle: 'Everything was going up, and everyone had already decided it would keep going up.',
-        answers: ['2021', 'oct 2021', 'october 2021', 'bull'],
-    },
-    {
-        id: 'luna-2022',
-        label: 'May 2022 — Luna collapses',
-        startBlock: 14_770_000,
-        riddle: 'Something that promised to always be worth a dollar stopped being worth a dollar.',
-        answers: ['2022', 'may 2022', 'luna', 'terra', 'ust'],
-    },
-    {
-        id: 'merge-2022',
-        label: 'September 2022 — the Merge',
-        startBlock: 15_537_400,
-        riddle: 'The way blocks got made changed forever, and the price barely noticed.',
-        answers: ['2022', 'sep 2022', 'september 2022', 'merge', 'pos'],
-    },
-    {
-        id: 'ftx-2022',
-        label: 'November 2022 — FTX collapses',
-        startBlock: 15_950_000,
-        riddle: 'An exchange everyone trusted turned out to be holding nothing at all.',
-        answers: ['2022', 'nov 2022', 'november 2022', 'ftx', 'sbf', 'alameda'],
-    },
-    {
-        id: 'etf-2024',
-        label: 'March 2024 — the ETF era',
-        startBlock: 19_400_000,
-        riddle: 'Wall Street finally got a wrapper it was allowed to buy.',
-        answers: ['2024', 'mar 2024', 'march 2024', 'etf'],
-    },
-    {
-        id: 'gas-crisis-2021',
-        label: 'May 2021 — peak gas',
-        startBlock: 12_500_000,
-        riddle: 'The chain worked fine. Everyone just stopped being able to afford it.',
-        answers: ['2021', 'may 2021', 'gas'],
-    },
-];
+export {ERAS, type EraSpec} from './eras.js';

@@ -1,5 +1,0 @@
-# Never upload the answers as public files. The reveal data (era label, accepted
-# answers, and the hidden future path) is bundled into the Worker instead and
-# released through /api/reveal/:id only once the round is Settled on-chain.
-# See faucet-worker/src/reveal.ts.
-data/*.reveal.json

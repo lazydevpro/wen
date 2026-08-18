@@ -23,12 +23,18 @@ export const MIN_MULTIPLIER = 0.3;
 /**
  * Total grid height in standard deviations of the horizon.
  *
- * Calibrated against real outcomes, not chosen a priori. At the original 6.0 the grid was
- * roughly twice as wide as real price paths ever travel, so the outer bands never hit,
- * players paid for unwinnable cells, and the realised house edge ballooned to 56%.
- * See `pnpm simulate`.
+ * Calibrated against real outcomes, not chosen a priori — and calibrated TWICE, because the
+ * first attempt did not generalise:
+ *
+ *   6.00  ->  44% RTP   grid twice as wide as prices ever travel; outer bands unwinnable
+ *   2.55  ->  87% RTP   fitted to six windows, looked right, took 13% instead of 3.7%
+ *   3.40  ->  97% RTP   fitted to 120 windows, 960 real outcomes
+ *
+ * Six price paths could not pin a distribution. The 2.55 fit corrected an obvious 56% edge and
+ * stopped there, which is the trap: a number that fits the sample you happen to have is not a
+ * calibration. Re-check with `pnpm sweep-span` whenever the pool changes materially.
  */
-export const GRID_SIGMA_SPAN = Number(process.env.GRID_SIGMA_SPAN ?? 2.55);
+export const GRID_SIGMA_SPAN = Number(process.env.GRID_SIGMA_SPAN ?? 3.4);
 
 export interface Candle {
     index: number;

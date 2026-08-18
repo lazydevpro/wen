@@ -13,14 +13,17 @@ import {JsonRpcProvider} from 'ethers';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {cfg, DEFAULT_POOL, ERAS} from './lib/config.js';
 import {sampleStratified} from './lib/uniswap.js';
+import {blockForDate} from './lib/blocks.js';
 import {buildWindow, gridEdgeStats, GRID_PRICE_BANDS, GRID_TIME_STEPS, HOUSE_EDGE} from './lib/window.js';
 
 const OUT_DIR = new URL('../data/windows/', import.meta.url).pathname;
 
-async function buildOne(eth: JsonRpcProvider, eraId: string, totalCandles: number) {
-    const era = ERAS.find((e) => e.id === eraId);
-    if (!era) throw new Error(`unknown era "${eraId}". known: ${ERAS.map((e) => e.id).join(', ')}`);
+async function buildOne(eth: JsonRpcProvider, eraId: string, totalCandles: number, head: number) {
+    const spec = ERAS.find((e) => e.id === eraId);
+    if (!spec) throw new Error(`unknown era "${eraId}". known: ${ERAS.map((e) => e.id).join(', ')}`);
 
+    // Eras carry a date, not a block — block time changed at the Merge, so it has to be resolved.
+    const era = {...spec, startBlock: await blockForDate(eth, spec.date, head)};
     const pool = DEFAULT_POOL;
     console.log(`\n${'='.repeat(70)}`);
     console.log(`▶ ${era.label}`);
@@ -83,12 +86,13 @@ async function main() {
     }
     const totalCandles = Number(candlesArg ?? 40);
     const eth = new JsonRpcProvider(cfg.ethRpc);
+    const head = await eth.getBlockNumber();
 
     const ids = eraArg === 'all' ? ERAS.map((e) => e.id) : [eraArg];
     const built = [];
     for (const id of ids) {
         try {
-            built.push(await buildOne(eth, id, totalCandles));
+            built.push(await buildOne(eth, id, totalCandles, head));
         } catch (e: any) {
             console.error(`  ❌ ${id}: ${e.message ?? e}`);
         }

@@ -113,8 +113,6 @@ const state = {
     game: null,
     address: null,
     credit: 0n,
-    windows: [],
-    byWindowId: new Map(),
     win: null,
     roundId: null,
     ante: 1,
@@ -134,8 +132,6 @@ const state = {
 // ─────────────────────────────────────────────────────────── boot
 
 (async function init() {
-    state.windows = await (await fetch('data/windows.json')).json();
-    for (const w of state.windows) state.byWindowId.set(w.windowId.toLowerCase(), w);
     renderAnteGrid();
     wireControls();
     if (window.ethereum?.selectedAddress) connect().catch(() => {});
@@ -265,15 +261,29 @@ function renderAnteGrid() {
     $('decisionHint').textContent = `${DECISION_SECONDS} seconds`;
 }
 
-// ─────────────────────────────────────────────────────── reveal
+// ─────────────────────────────────────────────────────── window + reveal
+
+/**
+ * Fetch the one window this round was dealt.
+ *
+ * There is deliberately no catalogue to load. Shipping an index of every window would be a
+ * ~1 MB download and would tell the player exactly how many charts exist and what they are —
+ * the thing the blind deal is meant to prevent. The windowId only becomes knowable from the
+ * RoundDealt receipt, so this cannot be fetched ahead of committing the ante.
+ */
+async function fetchWindow(windowId) {
+    const r = await fetch(`data/w/${windowId}.json`);
+    if (!r.ok) throw new Error('dealt a window this client does not have');
+    return r.json();
+}
 
 /**
  * The answer never ships as a static file — it would be one fetch away, and knowing the
  * hidden path before betting is the whole game. The server hands it over only once this
  * round is Settled on-chain, which is to say only once the bets can no longer change.
  */
-async function fetchReveal(id, roundId) {
-    const r = await fetch(`/api/reveal/${id}?roundId=${roundId}`);
+async function fetchReveal(windowId, roundId) {
+    const r = await fetch(`/api/reveal/${windowId}?roundId=${roundId}`);
     if (!r.ok) {
         const {error} = await r.json().catch(() => ({}));
         throw new Error(error ?? 'could not load the reveal');
@@ -402,8 +412,7 @@ async function deal() {
 
         state.roundId = ev.args.roundId;
         const wid = ev.args.windowId.toLowerCase();
-        state.win = state.byWindowId.get(wid);
-        if (!state.win) throw new Error('dealt an unknown window');
+        state.win = await fetchWindow(wid);
 
         await refreshCredit();
         openTable();
@@ -576,7 +585,7 @@ async function lockIn() {
         await tx.wait();
         await refreshCredit();
 
-        state.reveal = await fetchReveal(state.win.id, state.roundId);
+        state.reveal = await fetchReveal(state.win.windowId, state.roundId);
         $('dealVeil').classList.remove('on');
         await animateReveal();
         await resolveOnChain();

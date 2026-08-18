@@ -17,7 +17,13 @@
     "verify-onchain": "tsx src/verify-onchain.ts",
     "play-round": "tsx src/play-round.ts",
     "test-reverts": "tsx src/test-reverts.ts",
-    "serve": "tsx src/faucet-server.ts"
+    "serve": "tsx src/faucet-server.ts",
+    "bulk-windows": "tsx src/bulk-windows.ts",
+    "relabel-windows": "tsx src/relabel-windows.ts",
+    "register-bulk": "tsx src/register-bulk.ts",
+    "gen-reveal-index": "tsx src/gen-reveal-index.ts",
+    "sweep-span": "tsx src/sweep-span.ts",
+    "rebuild-grids": "tsx src/rebuild-grids.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",

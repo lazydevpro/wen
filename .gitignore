@@ -33,3 +33,8 @@ worker/data/
 # Wrangler local secrets
 .dev.vars
 .wrangler/
+
+# Generated window pool — rebuildable with `pnpm bulk-windows` (large, and reveals are answers)
+worker/data/windows/
+worker/data/reveals/
+worker/data/manifest.json
