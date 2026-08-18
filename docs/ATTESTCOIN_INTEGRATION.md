@@ -1,12 +1,12 @@
 # Attestcoin Protocol Integration
 
-**Hindsight · BUIDL CTC 2026 Fall · Gaming track · CC3 Testnet (chainId 102031)**
+**wen · BUIDL CTC 2026 Fall · Gaming track · CC3 Testnet (chainId 102031)**
 
 ---
 
 ## Why the protocol is load-bearing
 
-Hindsight shows you a slice of Ethereum's price history without telling you when it is, and asks
+wen shows you a slice of Ethereum's price history without telling you when it is, and asks
 you to bet on what happened next.
 
 **If the chart can be fabricated, the game has no answer.** "Which era is this?" is only a question
@@ -25,7 +25,7 @@ history lives on Ethereum. Attestcoin is the only trustless bridge between them.
 
 ## Why this needs Creditcoin specifically
 
-Hindsight's core axis is **depth into the past**. That is precisely where Creditcoin's attestation
+wen's core axis is **depth into the past**. That is precisely where Creditcoin's attestation
 layer is unique:
 
 - **No lookback limit.** `attestationGenesisHeight = 0`, and we verified it empirically by proving

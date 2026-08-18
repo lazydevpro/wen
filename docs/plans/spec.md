@@ -1,4 +1,4 @@
-# Hindsight — Spec
+# wen — Spec
 
 *Working title. Alternatives: When, Rewind, Ghost Chart.*
 
@@ -46,7 +46,7 @@ Supporting facts:
 - **Only Creditcoin can reach back this far.** Flare's FDC has a hard 14-day request window;
   historical attestation is architecturally excluded for them.
 - **Cost is flat under 90 days and trivial beyond** (~2×10⁻⁴ CTC), with **no lookback limit**.
-- **Latency is irrelevant** — we prove transactions from years ago, attested long since. Hindsight is
+- **Latency is irrelevant** — we prove transactions from years ago, attested long since. wen is
   the rare design where Attestcoin's ~7-minute lag costs nothing.
 
 ## Data pipeline

@@ -1,5 +1,5 @@
 /**
- * Hindsight — client.
+ * wen — client.
  *
  * Round flow, and why it's shaped this way:
  *
@@ -677,7 +677,7 @@ function finish(payout) {
     const net = payout - staked;
     const bands = state.reveal.outcome;
 
-    $('resultVerdict').textContent = net > 0 ? 'you read it right' : 'hindsight is 20/20';
+    $('resultVerdict').textContent = net > 0 ? 'you read it right' : 'wrong side of history';
     $('resultVerdict').className = 'verdict ' + (net > 0 ? 'won' : 'lost');
     $('resultAmount').textContent = (net >= 0 ? '+' : '') + net.toFixed(2) + ' CTC';
     $('resultEra').innerHTML = `This was <strong>${state.reveal.eraLabel}</strong>.<br />${state.win.riddle}`;
@@ -696,6 +696,19 @@ function finish(payout) {
 }
 
 // ─────────────────────────────────────────────────────── chart
+
+/**
+ * Canvas can't read CSS variables, so pull them off :root. Keeps styles.css the single source
+ * of truth for colour — the chart drifting out of sync with the interface is how the old
+ * palette ended up with a pink line nothing else used.
+ */
+const paletteCache = new Map();
+function palette(name) {
+    if (!paletteCache.has(name)) {
+        paletteCache.set(name, getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+    }
+    return paletteCache.get(name);
+}
 
 function drawChart() {
     const cv = $('chart');
@@ -732,29 +745,30 @@ function drawChart() {
     }
 
     ctx.setLineDash([4, 5]);
-    ctx.strokeStyle = 'rgba(255,94,168,0.4)';
+    ctx.strokeStyle = palette('--hairline-strong');
     ctx.beginPath(); ctx.moveTo(0, Y(w.anchorPrice)); ctx.lineTo(W, Y(w.anchorPrice)); ctx.stroke();
     ctx.setLineDash([]);
 
-    const line = (pts, offset, color, width, glow) => {
+    const line = (pts, offset, color, width) => {
         if (!pts.length) return;
         ctx.beginPath();
         pts.forEach((p, i) => { const x = X(i + offset), y = Y(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
         ctx.strokeStyle = color; ctx.lineWidth = width;
-        ctx.shadowBlur = glow; ctx.shadowColor = color;
-        ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.stroke();
     };
 
-    line(visible, 0, '#ff5ea8', 2.4, 12);
-    // The revealed path is deliberately NEUTRAL white, not green. Green is reserved for
-    // "your bet won" — colouring the whole line green made every reveal read as a win.
-    if (revealed.length) line([visible[visible.length - 1], ...revealed], visible.length - 1, '#ffffff', 2.4, 10);
+    // Blue is chrome — it marks the candles you were given. The revealed path is white, the
+    // brightest thing on screen, because it is the new information. Neither is ever green or
+    // red: those belong to the grid cells, where they answer "did my bet win?".
+    line(visible, 0, palette('--blue'), 2.4);
+    if (revealed.length) line([visible[visible.length - 1], ...revealed], visible.length - 1, palette('--ink'), 2.4);
 
     const headVal = revealed.length ? revealed[revealed.length - 1] : visible[visible.length - 1];
     const headIdx = revealed.length ? visible.length - 1 + revealed.length : visible.length - 1;
     ctx.beginPath();
     ctx.arc(X(headIdx), Y(headVal), 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = revealed.length ? '#ffffff' : '#ff5ea8';
+    ctx.fillStyle = revealed.length ? palette('--ink') : palette('--blue');
     ctx.fill();
 }
 
@@ -781,11 +795,17 @@ function checkGuess() {
 
 // ─────────────────────────────────────────────────────── leaderboard
 
-const LB_KEY = 'hindsight.leaderboard';
+const LB_KEY = 'wen.leaderboard';
+/** Pre-rename key. Read as a fallback so the rename doesn't silently bin anyone's best hands. */
+const LB_KEY_LEGACY = 'hindsight.leaderboard';
+
+function readBoard() {
+    const raw = localStorage.getItem(LB_KEY) ?? localStorage.getItem(LB_KEY_LEGACY);
+    try { return JSON.parse(raw || '[]'); } catch { return []; }
+}
 
 function recordScore(era, net) {
-    let board = [];
-    try { board = JSON.parse(localStorage.getItem(LB_KEY) || '[]'); } catch { board = []; }
+    let board = readBoard();
     const entry = {era, net: Number(net.toFixed(2)), at: Date.now()};
     board.push(entry);
     board.sort((a, b) => b.net - a.net);
@@ -795,8 +815,7 @@ function recordScore(era, net) {
 }
 
 function renderLeaderboard(justPlayed) {
-    let board = [];
-    try { board = JSON.parse(localStorage.getItem(LB_KEY) || '[]'); } catch { board = []; }
+    const board = readBoard();
     const ol = $('leaderboard');
     if (!ol) return;
     if (!board.length) { ol.innerHTML = '<div class="empty">no hands yet</div>'; return; }

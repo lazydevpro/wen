@@ -3,16 +3,26 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>Hindsight — bet on what already happened</title>
+<title>wen — bet on what already happened</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Tektur:wght@500&family=Inter:wght@400;500&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <header class="topbar">
-  <div class="brand"><span class="brand-mark">◷</span> hindsight</div>
+  <!-- a clock face with one hand: the mark rhymes with Creditcoin's C-and-bar, and the
+       question the game asks is literally "when?" -->
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+        <path d="M12 12 L18.4 8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </span>
+    wen
+  </div>
   <div class="topbar-right">
     <div class="stat" id="creditStat" hidden><label>credit</label><span id="credit">0</span><em>CTC</em></div>
     <button id="btnConnect" class="ghost">connect wallet</button>
@@ -23,9 +33,10 @@
 <!-- ─────────────────────────── connect ─────────────────────────── -->
 <section id="screenConnect" class="screen active">
   <div class="hero">
-    <h1>Somewhere in Ethereum's past,<br /><i>this actually happened.</i></h1>
+    <div class="eyebrow">Live on Creditcoin CC3 Testnet</div>
+    <h1>You are somewhere in Ethereum's past.<br /><i>wen, exactly?</i></h1>
     <p class="sub">
-      You'll be dealt a random slice of real Ethereum price history — but not told when it is.
+      You'll be dealt a real slice of Ethereum price history — but not told when it is.
       A riddle is your only clue. Read the chart, work out <em>when</em> you are,
       then bet on what came next.
     </p>
@@ -34,7 +45,7 @@
       Nothing here is simulated.
     </p>
     <button id="btnConnectBig" class="primary wide">connect wallet to play</button>
-    <p class="fineprint center" id="netHint">Creditcoin CC3 Testnet · testnet CTC only, no real value</p>
+    <p class="fineprint center" id="netHint">testnet CTC only · no real value</p>
   </div>
 </section>
 

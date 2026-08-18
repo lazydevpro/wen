@@ -1,5 +1,5 @@
 /**
- * Hindsight faucet + static host.
+ * wen — faucet + static host.
  *
  *   pnpm serve            # http://localhost:5173
  *

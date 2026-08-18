@@ -1,4 +1,4 @@
-# Hindsight
+# wen
 
 **Bet on what already happened.**
 
@@ -22,7 +22,7 @@ If the chart could be fabricated, *"which era is this?"* would have no answer. T
 means something because the candles genuinely came from that moment in Ethereum's history.
 
 That makes Attestcoin load-bearing rather than decorative — and it needs **Creditcoin
-specifically**, because Hindsight's core axis is depth into the past:
+specifically**, because wen's core axis is depth into the past:
 
 - **No lookback limit.** We prove transactions from October 2021 — 1,731 days old — at the same
   cost as recent ones.
@@ -91,8 +91,9 @@ the candle series against public price history, and walks away for free — the 
 design exists to price. The ante is not a fee: it counts toward your stake, so an honest player
 pays nothing extra. Deal and walk away and it is forfeit.
 
-`DECISION_BLOCKS = 8` (~2 min) enforces the countdown on-chain. That budget covers the deal
-confirming, the 45s client clock, and the settle being mined — it is not just thinking time.
+`DECISION_BLOCKS = 20` (~5 min at 15s blocks) enforces the countdown on-chain. That budget covers
+the deal confirming, the 45s client clock, and the settle being mined — it is not just thinking
+time. Earlier values of 4 and 8 both stranded real testers whose settle missed the window.
 
 ### One constraint worth knowing
 
@@ -154,7 +155,7 @@ tiers work but cap `eth_getLogs` at a 10-block range, which the indexer chunks a
 
 ## Hosting
 
-Deployed as a single Cloudflare Worker: **https://hindsight.lazydevpro.workers.dev**
+Deployed as a single Cloudflare Worker: **https://wen.lazydevpro.workers.dev**
 
 ```bash
 cd faucet-worker && npm install
@@ -178,7 +179,7 @@ who is already funded. Moving it off-chain removes the bootstrap problem entirel
 Share the link with the invite code appended; the client reads `?code=` and passes it through:
 
 ```
-https://hindsight.lazydevpro.workers.dev/?code=<FAUCET_CODE>
+https://wen.lazydevpro.workers.dev/?code=<FAUCET_CODE>
 ```
 
 Guards, in the order that they actually matter:

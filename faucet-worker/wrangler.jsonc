@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "hindsight",
+  "name": "wen",
   "main": "src/index.ts",
   "compatibility_date": "2025-10-01",
   // ethers reaches for Node builtins (crypto, buffer) when signing.

@@ -1,7 +1,7 @@
 /**
  * SPIKE: prove a real historical Uniswap V3 Swap from Ethereum mainnet on CC3 Testnet.
  *
- * Validates the entire Hindsight thesis end-to-end:
+ * Validates the entire wen thesis end-to-end:
  *   1. find a real Uniswap V3 Swap event on Ethereum mainnet
  *   2. generate an Attestcoin inclusion proof for its transaction
  *   3. verify that proof against Creditcoin's BlockProver precompile
@@ -122,7 +122,7 @@ async function main() {
     console.log('='.repeat(72));
     console.log(`\nA real Uniswap V3 swap at block ${target.blockNumber} was proven on Creditcoin`);
     console.log(`and yields a verifiable ETH price of $${truthPrice.toFixed(2)}.`);
-    console.log(`That is one candle of Hindsight, cryptographically anchored.\n`);
+    console.log(`That is one candle of wen, cryptographically anchored.\n`);
 }
 
 main().catch((e) => {

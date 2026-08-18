@@ -1,7 +1,7 @@
 /**
  * SPIKE 2: batch-prove many Uniswap V3 swaps with ONE shared continuity proof.
  *
- * This is the economics of Hindsight — a chart needs many candles, and each candle
+ * This is the economics of wen — a chart needs many candles, and each candle
  * needs a proven swap. If batching works, a window costs ~1 continuity proof instead of N.
  *
  * Constraints from the docs: MAX_BATCH_SIZE = 10, MAX_BATCH_RANGE = 1000 blocks.

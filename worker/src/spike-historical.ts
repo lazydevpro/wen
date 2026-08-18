@@ -2,7 +2,7 @@
  * SPIKE 3 — THE CRITICAL ONE.
  *
  * Can Attestcoin prove a transaction from YEARS ago? The docs claim no lookback limit
- * (provable back to block 1) and a cost that only rises past ~90 days. Hindsight lives
+ * (provable back to block 1) and a cost that only rises past ~90 days. wen lives
  * or dies on this: if we can't prove 2021, there is no game.
  *
  * Probes several eras and reports proof size, continuity length, cost and verification.

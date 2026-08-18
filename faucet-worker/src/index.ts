@@ -1,8 +1,8 @@
 /**
- * Hindsight on Cloudflare — static client + faucet + gated reveals, one Worker.
+ * wen on Cloudflare — static client + faucet + gated reveals, one Worker.
  *
  *   npm run dev        # local, against real CC3
- *   npm run deploy     # https://hindsight.<subdomain>.workers.dev
+ *   npm run deploy     # https://wen.<subdomain>.workers.dev
  *
  * Static assets are served by the platform, not by this code: `run_worker_first` in
  * wrangler.jsonc limits the Worker to /api/*, so the chart and window data come off the

@@ -1,5 +1,5 @@
 /**
- * Builds a playable Hindsight window from real Ethereum history.
+ * Builds a playable wen window from real Ethereum history.
  *
  *   pnpm build-window <eraId> [totalCandles]
  *   pnpm build-window luna-2022 40

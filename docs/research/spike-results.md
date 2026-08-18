@@ -39,7 +39,7 @@ cost as batch    : ~3.344e-5 CTC          ← 10.0× cheaper
 BATCH VERIFIED   : ✅ TRUE
 ```
 
-Price series extracted from the proven batch — **this is a Hindsight chart**:
+Price series extracted from the proven batch — **this is a wen chart**:
 
 | block | ETH |
 |---|---|

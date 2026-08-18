@@ -39,7 +39,7 @@ const expectedBands = hidden.map((c: any) =>
 
 const fixture = {
     _comment:
-        'Exported from a real Hindsight window. expectedBands come from the TypeScript bandOf(); ' +
+        'Exported from a real wen window. expectedBands come from the TypeScript bandOf(); ' +
         'the Solidity test must agree or resolution pays the wrong cells.',
     windowId: keccak256(toUtf8Bytes(win.id)),
     eraLabel: win.era.label,
