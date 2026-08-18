@@ -107,6 +107,32 @@ const DECISION_SECONDS = 45;
 const ANTES = [0.5, 1, 2, 5];
 const STAKES = [0.5, 1, 2, 5];
 
+/**
+ * Where the round is, as one value.
+ *
+ * This used to be four unrelated flags — settling, reveal, timer, win — re-derived at every call
+ * site that needed a guard, and they disagreed: `if (state.reveal || state.settling)` in one place
+ * and `if (state.settling)` in another were both asking "are we still betting?".
+ *
+ * It has to be explicit because of the clock. On expiry the round either locks in whatever is
+ * selected or forfeits the ante, so anything that can steal input mid-round can cost real value —
+ * and a modal dialog makes the whole page `inert`. "May a dialog open right now?" needs exactly
+ * one answer, and this is it.
+ */
+const PHASE = {
+    IDLE: 'idle',           // no round; the only phase from which one can be dealt
+    DEALING: 'dealing',     // ante submitted, window not yet known
+    BETTING: 'betting',     // chart up, clock running — the dangerous one
+    SETTLING: 'settling',   // bets submitted, awaiting confirmation
+    REVEALING: 'revealing', // animating the hidden path
+    RESULT: 'result',       // round over, chart still on screen
+};
+
+/** Dialogs may only interrupt when nothing is at stake. */
+const DIALOG_PHASES = new Set([PHASE.IDLE, PHASE.RESULT]);
+const canOpenDialog = () => DIALOG_PHASES.has(state.phase);
+const isRoundLive = () => !DIALOG_PHASES.has(state.phase);
+
 const state = {
     provider: null,
     signer: null,
@@ -122,7 +148,7 @@ const state = {
     picks: new Map(),
     maxBet: 0,
     maxExposure: 0,
-    settling: false,
+    phase: PHASE.IDLE,
     reveal: null,
     guessed: false,
     timer: null,
@@ -132,6 +158,7 @@ const state = {
 // ─────────────────────────────────────────────────────────── boot
 
 (async function init() {
+    setPhase(PHASE.IDLE);   // publish the starting phase rather than only transitions
     renderAnteGrid();
     wireControls();
     if (window.ethereum?.selectedAddress) connect().catch(() => {});
@@ -143,6 +170,20 @@ function toast(msg, ms = 2600) {
     t.classList.add('show');
     clearTimeout(t._t);
     t._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/**
+ * The only way the phase changes. Every affordance that must not be reachable mid-round is
+ * disabled from here, so adding a control later cannot forget the rule.
+ */
+function setPhase(next) {
+    state.phase = next;
+    const live = isRoundLive();
+    for (const id of ['btnFaucet', 'btnDeposit', 'btnWithdraw', 'btnDeal', 'btnConnect']) {
+        const el = $(id);
+        if (el) el.toggleAttribute('data-round-live', live);
+    }
+    document.body.dataset.phase = next;
 }
 
 function show(screen) {
@@ -381,11 +422,12 @@ async function doWithdraw() {
 
 async function deal() {
     if (!state.game) return connect();
+    if (state.phase !== PHASE.IDLE && state.phase !== PHASE.RESULT) return;
     state.picks.clear();
     state.reveal = null;
     state.guessed = false;
     state.win = null;
-    state.settling = false;
+    setPhase(PHASE.DEALING);
 
     // show the play screen with the chart hidden — the veil is the honest bit:
     // we genuinely do not know the window yet.
@@ -419,6 +461,7 @@ async function deal() {
     } catch (e) {
         $('dealVeil').classList.remove('on');
         toast(explain(e));
+        setPhase(PHASE.IDLE);
         show('screenLobby');
     }
 }
@@ -440,6 +483,7 @@ function openTable() {
     setTimeout(drawChart, 60);
     window.addEventListener('resize', drawChart, {passive: true});
 
+    setPhase(PHASE.BETTING);
     startClock();
 }
 
@@ -453,7 +497,7 @@ function startClock() {
         el.classList.toggle('urgent', left <= 10);
         if (left <= 0) {
             clearInterval(state.timer);
-            if (state.settling) return;              // already signing; let it finish
+            if (state.phase !== PHASE.BETTING) return;   // already signing; let it finish
             if (state.picks.size > 0) lockIn();
             else showDeadEnd('time up — no bets placed, so the ante is forfeit');
         }
@@ -488,7 +532,7 @@ function buildGrid() {
 const fmtMult = (m) => (m >= 100 ? Math.round(m) + 'x' : m.toFixed(m < 10 ? 2 : 1) + 'x');
 
 function togglePick(t, p, mult) {
-    if (state.reveal || state.settling) return;
+    if (state.phase !== PHASE.BETTING) return;
     const key = `${t}:${p}`;
     if (state.picks.has(key)) {
         state.picks.delete(key);
@@ -565,9 +609,10 @@ function syncBets() {
 async function lockIn() {
     // The button and the expiring clock can both call this. Without a guard the player signs
     // twice and the second transaction reverts on an already-settled round.
-    if (state.settling) return;
+    // The button and the expiring clock can both reach here; only one may proceed.
+    if (state.phase !== PHASE.BETTING) return;
     if (state.picks.size === 0) return;
-    state.settling = true;
+    setPhase(PHASE.SETTLING);
     clearInterval(state.timer);
 
     const bets = [...state.picks.values()];
@@ -587,20 +632,20 @@ async function lockIn() {
 
         state.reveal = await fetchReveal(state.win.windowId, state.roundId);
         $('dealVeil').classList.remove('on');
+        setPhase(PHASE.REVEALING);
         await animateReveal();
         await resolveOnChain();
     } catch (e) {
         // A failed settle leaves the round Dealt on-chain with the ante committed. Say so
         // plainly and give a way out, rather than stranding the player on a dead table.
         showDeadEnd(explain(e));
-    } finally {
-        state.settling = false;
     }
 }
 
 /** Round can't continue — explain why and offer the only useful action. */
 function showDeadEnd(message) {
     clearInterval(state.timer);
+    setPhase(PHASE.RESULT);   // nothing is at stake any more; let the player out
     $('dealVeil').classList.add('on');
     $('veilText').innerHTML =
         `<strong style="color:var(--red)">${message}</strong><br /><br />` +
@@ -611,6 +656,7 @@ function showDeadEnd(message) {
         if (b) b.onclick = () => {
             document.querySelector('.spinner')?.removeAttribute('style');
             $('dealVeil').classList.remove('on');
+            setPhase(PHASE.IDLE);
             show('screenLobby');
         };
     }, 0);
@@ -701,6 +747,7 @@ function finish(payout) {
         .join('');
 
     recordScore(state.reveal.eraLabel, net);
+    setPhase(PHASE.RESULT);
     show('screenResult');
 }
 
@@ -847,7 +894,7 @@ function wireControls() {
     $('btnWithdraw').onclick = doWithdraw;
     $('btnDeal').onclick = deal;
     $('btnLockIn').onclick = lockIn;
-    $('btnAgain').onclick = () => { refreshFaucet(); show('screenLobby'); };
+    $('btnAgain').onclick = () => { setPhase(PHASE.IDLE); refreshFaucet(); show('screenLobby'); };
     $('btnGuess').onclick = checkGuess;
     $('guessInput').addEventListener('keydown', (e) => e.key === 'Enter' && checkGuess());
 
