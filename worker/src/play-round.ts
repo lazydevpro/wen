@@ -10,7 +10,9 @@ import {readFileSync} from 'node:fs';
 import {formatEther, parseEther} from 'ethers';
 import {cc3Provider, signer, gridGame, chartRegistry} from './lib/contracts.js';
 
-const WEB_DATA = new URL('../../web/data/', import.meta.url).pathname;
+// windows are public and keyed by windowId; reveals live outside web/ and are never served
+const WINDOW_DIR = new URL('../../web/data/w/', import.meta.url).pathname;
+const REVEAL_DIR = new URL('../data/reveals/', import.meta.url).pathname;
 
 const ANTE = parseEther('1');
 
@@ -56,15 +58,14 @@ async function main() {
     console.log(`    windowId      : ${windowId}`);
     console.log(`    deadlineBlock : ${deadlineBlock}  (current ${await provider.getBlockNumber()})`);
 
-    // which window did we get?
-    const index = JSON.parse(readFileSync(`${WEB_DATA}windows.json`, 'utf8'));
-    const win = index.find((w: any) => w.windowId.toLowerCase() === windowId.toLowerCase());
-    if (!win) throw new Error('dealt an unregistered window');
+    // which window did we get? exactly what the client does — fetch the one, by id
+    const key = windowId.toLowerCase();
+    const win = JSON.parse(readFileSync(`${WINDOW_DIR}${key}.json`, 'utf8'));
     console.log(`    dealt         : "${win.riddle}"`);
     console.log(`    (era withheld from the client until reveal)`);
 
     // ---- 3. bet ----
-    const reveal = JSON.parse(readFileSync(`${WEB_DATA}${win.id}.reveal.json`, 'utf8'));
+    const reveal = JSON.parse(readFileSync(`${REVEAL_DIR}${key}.json`, 'utf8'));
     const winningBand = reveal.outcome[0].p;
     const losingBand = winningBand === 0 ? 1 : 0;
 

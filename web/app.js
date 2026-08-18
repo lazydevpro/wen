@@ -32,8 +32,8 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x5659942E63a62017c11E8668abbD8FbfEb335939';
-const REGISTRY = '0x5263dd64098e545235e9184A31aF6aDb4d3AB119';
+const GRID_GAME = '0x0e60CdA4959849244095D1f0ED0F787e8Da39Ac3';
+const REGISTRY = '0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61';
 
 const GAME_ABI = [
     'function deposit() external payable',

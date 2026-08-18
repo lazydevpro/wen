@@ -10,7 +10,7 @@ Every candle is a real Uniswap V3 swap, cryptographically proven onto Creditcoin
 Attestcoin Protocol. Nothing is simulated.
 
 > *"Something that promised to always be worth a dollar stopped being worth a dollar."*
-> — one of six eras
+> — one of 120 windows
 
 **BUIDL CTC 2026 Fall · Gaming track · CC3 Testnet**
 
@@ -24,8 +24,8 @@ means something because the candles genuinely came from that moment in Ethereum'
 That makes Attestcoin load-bearing rather than decorative — and it needs **Creditcoin
 specifically**, because wen's core axis is depth into the past:
 
-- **No lookback limit.** We prove transactions from October 2021 — 1,731 days old — at the same
-  cost as recent ones.
+- **No lookback limit.** The pool reaches back to May 2021, over five years, and proving a swap
+  from then costs the same as proving one from last week.
 - **Flare's FDC, the closest comparable attestation layer, has a hard 14-day request window.**
   This game cannot be built there.
 
@@ -34,11 +34,14 @@ specifically**, because wen's core axis is depth into the past:
 | Contract | Address |
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0x5263dd64098e545235e9184A31aF6aDb4d3AB119` |
-| `GridGame` | `0x5659942E63a62017c11E8668abbD8FbfEb335939` |
+| `ChartRegistry` | `0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61` |
+| `GridGame` | `0x0e60CdA4959849244095D1f0ED0F787e8Da39Ac3` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
-Six eras registered: Oct 2021 (the run to the ATH), Luna, the Merge, FTX, the ETF era, peak gas.
+**120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
+peak gas, the London fork, the run to the ATH and the top, Luna, the lender freezes, the Merge,
+FTX, capitulation, the USDC depeg, Shapella, the SEC suits, the 2023 quiet, both ETF approvals,
+the carry unwind and the election. No two windows share a candle.
 
 ## How it works
 
@@ -64,8 +67,9 @@ connect wallet → deposit once → pick an ante → DEAL
          └─ place bets → settleRound() → resolveRound() → reveal
 ```
 
-- You are **never shown the catalogue**. A window is picked on-chain and you cannot know which
-  until the ante transaction lands.
+- You are **never shown the catalogue**. There is no index to download: the client fetches the
+  single window it was dealt, keyed by a windowId that only exists once the ante is mined. It
+  cannot enumerate the pool, or even learn how large it is.
 - **Visible 20%** of a ~10-day window is drawn; the rest is hidden.
 - **A grid of (time × price) cells** sits over the future, each printed with its multiplier.
 - **Multipliers are computed from the visible candles only** — the odds cannot leak the hidden path.
@@ -97,32 +101,43 @@ time. Earlier values of 4 and 8 both stranded real testers whose settle missed t
 
 ### One constraint worth knowing
 
-The per-round exposure cap (bankroll ÷ 50) applies to the **worst case where every cell hits**.
+The per-round exposure cap (bankroll ÷ 20) applies to the **worst case where every cell hits**.
 A 250× cell can therefore only carry `cap / 250` CTC — which can be *less than the ante*, forcing
 bets to be spread rather than concentrated. The UI surfaces this before you can hit the revert.
 
-## House edge — and the bug worth reading about
+## House edge — calibrated twice, because once was not enough
 
-Target RTP is 96.3% (3.7% edge). The arithmetic was exact from the start. It was still wrong.
+Target RTP is 96.3% (3.7% edge). The arithmetic was exact from the start. It was wrong twice.
 
-The grid was priced from a normal random walk fitted to the visible candles, spanning ±3σ. Real
-price paths travel nowhere near that far, so the outer bands were unreachable — players were buying
-cells that **could not win**. Realised house edge: **56%**.
+**First miss.** The grid was priced from a normal random walk fitted to the visible candles,
+spanning ±3σ. Real price paths travel nowhere near that far, so the outer bands were unreachable
+and players were buying cells that **could not win**. Realised edge: **56%**. Narrowing to 2.55σ
+brought it to ~95% against the six windows that existed then.
 
-Testing against real historical outcomes (rather than resampling the model that set the odds)
-caught it. Sweeping the grid width gave a clean curve:
+**Second miss, found by building this pool.** 2.55σ was fitted to *six price paths*. Measured
+against 120 windows and 960 real outcomes it returns **87%** — a 13% house edge, more than three
+times the target. Six paths cannot pin a distribution. The first calibration corrected an obvious
+56% error and stopped there, which felt like enough and was not.
 
-| Grid width | Realised RTP |
+| Grid width | RTP over 960 real outcomes |
 |---|---|
-| 6.0 σ | 44.3% |
-| 3.0 σ | 78.6% |
-| **2.55 σ** | **95.3%** ✅ |
-| 2.0 σ | 111.4% (house loses) |
+| 2.55 σ | 86.9% (13.1% edge — gouging) |
+| 3.0 σ | 88.6% |
+| **3.4 σ** | **97.6%** ✅ |
+| 3.7 σ | 98.2% |
+| 4.5 σ | 106.9% (house loses) |
 
-Now at a **4.66% realised edge** with outcomes spread across all twelve bands.
+Now at a **2.41% realised edge**, with 117 of 960 columns being total losses for a uniform bettor
+(the price left the grid entirely).
+
+**The harness was lying too.** `simulate.ts` skipped columns where the price left the grid —
+removing them from the denominator as well as the numerator, and so discarding precisely the
+columns where the house wins every unit. It overstated RTP by about 20 points, and briefly had me
+reporting that the house was losing money when it was in fact overcharging by 4×.
 
 I had assumed the failure mode would be fat tails *underpricing* the tails. It was the exact
-opposite. Run it yourself: `pnpm --dir worker simulate`.
+opposite, both times. Run it yourself: `pnpm --dir worker simulate`, and re-sweep with
+`pnpm --dir worker sweep-span` whenever the pool changes.
 
 ## Repo
 
@@ -143,7 +158,10 @@ pnpm --dir contracts install && forge build --root contracts
 
 forge test --root contracts               # 33 tests against real proven mainnet data
 pnpm --dir worker spike                   # prove a real swap (needs no CTC — view call)
-pnpm --dir worker build-window all        # rebuild all six eras from Ethereum
+pnpm --dir worker bulk-windows            # rebuild the 120-window pool (~15 min of RPC)
+pnpm --dir worker relabel-windows         # honest labels/riddles per slice
+pnpm --dir worker export-public           # split public window data from reveals
+pnpm --dir worker gen-reveal-index        # bundle reveals for the Worker
 pnpm --dir worker simulate                # house-edge calibration
 pnpm --dir worker verify-onchain          # read candles back, compare to Ethereum
 
@@ -160,7 +178,6 @@ Deployed as a single Cloudflare Worker: **https://wen.lazydevpro.workers.dev**
 ```bash
 cd faucet-worker && npm install
 npx wrangler secret put FAUCET_PRIVATE_KEY   # dedicated key, never the deployer's
-npx wrangler secret put FAUCET_CODE
 npx wrangler deploy
 ```
 

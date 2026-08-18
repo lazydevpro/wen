@@ -20,6 +20,18 @@ import {registrationParams} from './lib/registration.js';
 
 const DIR = new URL('../data/windows/', import.meta.url).pathname;
 
+/** The CC3 RPC times out occasionally under a long run; none of these calls are side-effecting. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+    for (let i = 0; ; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            if (i >= attempts - 1) throw e;
+            await new Promise((r) => setTimeout(r, 800 * 2 ** i));
+        }
+    }
+}
+
 async function main() {
     const dry = process.argv.includes('--dry');
     const files = readdirSync(DIR).filter((f) => f.endsWith('.json')).sort();
@@ -56,17 +68,23 @@ async function main() {
             continue;
         }
 
-        if (await registry.exists(p.windowId)) {
-            already++;
-            continue;
-        }
         if (dry) {
+            if (await registry.exists(p.windowId)) {
+                already++;
+                continue;
+            }
             console.log(`  · ${win.id.padEnd(24)} would register ${p.windowId.slice(0, 12)}…  ${p.eraLabel}`);
             sent++;
             continue;
         }
 
+        // Everything touching the RPC is inside the try. A transient timeout on the `exists`
+        // probe used to escape the loop entirely and kill a 120-window run at window 13.
         try {
+            if (await withRetry(() => registry.exists(p.windowId))) {
+                already++;
+                continue;
+            }
             const tx = await registry.registerWindow(
                 {
                     windowId: p.windowId,
