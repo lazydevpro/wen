@@ -15,7 +15,8 @@
     "simulate": "tsx src/simulate.ts",
     "prove-candles": "tsx src/prove-candles.ts",
     "verify-onchain": "tsx src/verify-onchain.ts",
-    "play-round": "tsx src/play-round.ts"
+    "play-round": "tsx src/play-round.ts",
+    "test-reverts": "tsx src/test-reverts.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",

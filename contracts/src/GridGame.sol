@@ -31,19 +31,30 @@ contract GridGame {
     /// @dev bankroll must be this many times the max single bet (1% ruin risk at sigma ~2.54)
     uint256 public constant BANKROLL_RATIO = 400;
 
-    /// @dev a single round may never risk more than 1/EXPOSURE_DIVISOR of the bankroll
-    uint256 public constant EXPOSURE_DIVISOR = 50;
+    /**
+     * @dev A single round may never risk more than 1/EXPOSURE_DIVISOR of the bankroll.
+     *
+     * Started at 50 (2% of bankroll). That made a large share of the grid unbettable: at a
+     * 4000 CTC bankroll the cap was 80 CTC, so a 250x cell could only carry 0.32 CTC — less
+     * than the smallest sensible ante. Players picked a long-shot cell, got refused, and lost
+     * the ante to the clock. 20 (5% of bankroll) keeps the round bounded while letting an
+     * ante actually sit on a long-shot cell.
+     */
+    uint256 public constant EXPOSURE_DIVISOR = 20;
 
     /**
      * @dev How long the player has to settle, in blocks, counted from startRound.
      *
-     * The budget is not just the player's thinking time. From startRound's block the clock must
-     * cover: the deal confirming (~1 block) before the chart is even drawn, the ~45s client
-     * countdown, and the settle transaction being mined (~1 block). At 15s blocks that is ~75s,
-     * so 4 blocks was too tight and honest players would time out. 8 blocks (~2 min) leaves
-     * headroom while still being far too short to reverse-search a chart by hand.
+     * The budget is not just the player's thinking time. From startRound's block it must cover
+     * the deal confirming before the chart is drawn, the 45s client countdown, the player
+     * reaching for their wallet and confirming, and the settle being mined.
+     *
+     * 4 blocks then 8 both proved too tight in real play — testers lost antes to the clock
+     * while a wallet prompt sat unconfirmed. 20 blocks (~5 min) is generous for a human and
+     * changes nothing for an attacker: a bot that can cross-correlate a chart against public
+     * price history does it in seconds, so tightening this punishes only honest players.
      */
-    uint256 public constant DECISION_BLOCKS = 8;
+    uint256 public constant DECISION_BLOCKS = 20;
 
     /// @dev unresolved rounds become reclaimable after this long
     uint256 public constant ROUND_TIMEOUT = 1 days;

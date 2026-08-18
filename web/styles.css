@@ -250,3 +250,5 @@ button { font-family: var(--mono); cursor: pointer; }
            border-top-color: var(--pink); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .totals .win.over { color: var(--red); }
+.cell.unaffordable { opacity: 0.28; }
+.cell.unaffordable:hover { background: rgba(255,92,92,0.12); border-color: var(--red); color: var(--red); }

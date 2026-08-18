@@ -32,7 +32,7 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x6A3d2866A01E7ee66445BaF6f2c7971845B7e7ce';
+const GRID_GAME = '0x5659942E63a62017c11E8668abbD8FbfEb335939';
 const REGISTRY = '0x5263dd64098e545235e9184A31aF6aDb4d3AB119';
 
 const GAME_ABI = [
@@ -46,9 +46,62 @@ const GAME_ABI = [
     'function settleRound(uint256 roundId,uint8[] ts,uint8[] ps,uint128[] amounts) external',
     'function resolveRound(uint256 roundId,uint256[] indices,uint64[] blockNumbers,uint160[] sqrtPrices,bytes32[][] proofs) external',
     'function roundSummary(uint256) external view returns (address,bytes32,uint8,uint128,uint128,uint128)',
+    'function deadlineOf(uint256) external view returns (uint256)',
     'event RoundDealt(uint256 indexed roundId,address indexed player,bytes32 indexed windowId,uint128 ante,uint64 deadlineBlock)',
+    'event RoundSettled(uint256 indexed roundId,address indexed player,uint256 staked,uint256 maxPayout)',
     'event RoundResolved(uint256 indexed roundId,address indexed player,uint256 payout)',
+    // Without these, every revert surfaces as "unknown custom error" and the player is told
+    // nothing about why their bet failed.
+    'error GamePaused()',
+    'error NoWindows()',
+    'error NoBets()',
+    'error InsufficientBalance(uint256 needed,uint256 have)',
+    'error AnteTooSmall()',
+    'error BetTooLarge(uint256 amount,uint256 maxBet)',
+    'error StakeBelowAnte(uint256 staked,uint128 ante)',
+    'error ExposureTooHigh(uint256 maxPayout,uint256 cap)',
+    'error CellOutOfRange(uint8 t,uint8 p)',
+    'error DuplicateCell(uint8 t,uint8 p)',
+    'error WrongRoundState(uint256 roundId)',
+    'error NotPlayer()',
+    'error DecisionWindowClosed(uint64 deadlineBlock,uint256 current)',
+    'error DecisionWindowStillOpen(uint64 deadlineBlock,uint256 current)',
+    'error RevealCountMismatch(uint256 expected,uint256 got)',
+    'error BadCandleProof(uint256 index)',
+    'error InsufficientBankroll(uint256 needed,uint256 have)',
 ];
+
+/** Turn a revert into something a player can act on. */
+function explain(e) {
+    const name = e?.revert?.name ?? e?.info?.error?.data?.name;
+    const args = e?.revert?.args ?? [];
+    switch (name) {
+        case 'DecisionWindowClosed':
+            return 'too slow — the decision window closed and the ante is forfeit';
+        case 'ExposureTooHigh':
+            return 'max win is too high for the bankroll — spread your bets across more cells';
+        case 'StakeBelowAnte':
+            return `you must stake at least your ante (${state.ante} CTC)`;
+        case 'BetTooLarge':
+            return `one bet is over the per-cell limit of ${state.maxBet.toFixed(1)} CTC`;
+        case 'InsufficientBalance':
+            return 'not enough table credit — deposit more';
+        case 'WrongRoundState':
+            return 'this round was already settled or expired';
+        case 'GamePaused':
+            return 'the table is paused (bankroll drawdown breaker)';
+        case 'DuplicateCell':
+            return 'the same cell was bet twice';
+        case 'CellOutOfRange':
+            return 'a bet landed outside the grid';
+        case 'NotPlayer':
+            return 'this round belongs to another address';
+        default:
+            break;
+    }
+    if (e?.code === 'ACTION_REJECTED' || e?.code === 4001) return 'you rejected the transaction';
+    return (e?.shortMessage ?? e?.message ?? String(e)).slice(0, 140);
+}
 
 const DECISION_SECONDS = 45;
 const ANTES = [0.5, 1, 2, 5];
@@ -71,6 +124,7 @@ const state = {
     picks: new Map(),
     maxBet: 0,
     maxExposure: 0,
+    settling: false,
     reveal: null,
     guessed: false,
     timer: null,
@@ -158,7 +212,7 @@ async function connect() {
         await window.ethereum.request({method: 'eth_requestAccounts'});
         await ensureCC3();
     } catch (e) {
-        toast(short(e));
+        toast(explain(e));
         return;
     }
 
@@ -220,7 +274,7 @@ async function doDeposit() {
         await refreshCredit();
         toast(`deposited ${amt} CTC`);
     } catch (e) {
-        toast(short(e));
+        toast(explain(e));
     }
 }
 
@@ -231,11 +285,11 @@ async function doWithdraw() {
         await refreshCredit();
         toast('withdrawn');
     } catch (e) {
-        toast(short(e));
+        toast(explain(e));
     }
 }
 
-const short = (e) => (e.shortMessage ?? e.message ?? String(e)).slice(0, 90);
+
 
 // ─────────────────────────────────────────────────────── the deal
 
@@ -245,6 +299,7 @@ async function deal() {
     state.reveal = null;
     state.guessed = false;
     state.win = null;
+    state.settling = false;
 
     // show the play screen with the chart hidden — the veil is the honest bit:
     // we genuinely do not know the window yet.
@@ -278,7 +333,7 @@ async function deal() {
         openTable();
     } catch (e) {
         $('dealVeil').classList.remove('on');
-        toast(short(e));
+        toast(explain(e));
         show('screenLobby');
     }
 }
@@ -313,11 +368,9 @@ function startClock() {
         el.classList.toggle('urgent', left <= 10);
         if (left <= 0) {
             clearInterval(state.timer);
+            if (state.settling) return;              // already signing; let it finish
             if (state.picks.size > 0) lockIn();
-            else {
-                toast('time up — ante forfeited');
-                show('screenLobby');
-            }
+            else showDeadEnd('time up — no bets placed, so the ante is forfeit');
         }
     };
     tick();
@@ -349,10 +402,19 @@ function buildGrid() {
 const fmtMult = (m) => (m >= 100 ? Math.round(m) + 'x' : m.toFixed(m < 10 ? 2 : 1) + 'x');
 
 function togglePick(t, p, mult) {
-    if (state.reveal) return;
+    if (state.reveal || state.settling) return;
     const key = `${t}:${p}`;
-    if (state.picks.has(key)) state.picks.delete(key);
-    else state.picks.set(key, {t, p, mult, stake: state.stake});
+    if (state.picks.has(key)) {
+        state.picks.delete(key);
+    } else {
+        const budget = state.maxExposure > 0 ? state.maxExposure : Infinity;
+        const maxHere = Math.min(budget / mult, state.maxBet || Infinity);
+        if (state.stake > maxHere) {
+            toast(`${fmtMult(mult)} cell takes at most ${maxHere.toFixed(2)} CTC — lower your stake`);
+            return;
+        }
+        state.picks.set(key, {t, p, mult, stake: state.stake});
+    }
     syncBets();
 }
 
@@ -360,7 +422,19 @@ const totalStaked = () => [...state.picks.values()].reduce((a, b) => a + b.stake
 const maxWin = () => [...state.picks.values()].reduce((a, b) => a + b.stake * b.mult, 0);
 
 function syncBets() {
-    document.querySelectorAll('.cell').forEach((el) => el.classList.toggle('picked', state.picks.has(el.dataset.key)));
+    // A cell's max stake is exposureCap / multiplier. Long-shot cells can therefore take far
+    // less than the ante, which is exactly what stranded early testers: they picked a 250x
+    // cell, the contract refused, and the clock ate the ante. Mark them up front.
+    const budget = state.maxExposure > 0 ? state.maxExposure : Infinity;
+    document.querySelectorAll('.cell').forEach((el) => {
+        el.classList.toggle('picked', state.picks.has(el.dataset.key));
+        const [t, p] = el.dataset.key.split(':').map(Number);
+        const cell = state.win?.grid.find((c) => c.t === t && c.p === p);
+        if (!cell) return;
+        const maxHere = Math.min(budget / cell.m, state.maxBet || Infinity);
+        el.classList.toggle('unaffordable', !state.picks.has(el.dataset.key) && state.stake > maxHere);
+        el.title = `max ${maxHere < 1 ? maxHere.toFixed(2) : maxHere.toFixed(1)} CTC on this cell`;
+    });
     const list = $('betList');
     if (state.picks.size === 0) {
         list.innerHTML = '<p class="muted">Tap cells on the grid →</p>';
@@ -403,7 +477,13 @@ function syncBets() {
 // ─────────────────────────────────────────────────────── settle + resolve
 
 async function lockIn() {
+    // The button and the expiring clock can both call this. Without a guard the player signs
+    // twice and the second transaction reverts on an already-settled round.
+    if (state.settling) return;
+    if (state.picks.size === 0) return;
+    state.settling = true;
     clearInterval(state.timer);
+
     const bets = [...state.picks.values()];
     const ts = bets.map((b) => b.t);
     const ps = bets.map((b) => b.p);
@@ -424,9 +504,30 @@ async function lockIn() {
         await animateReveal();
         await resolveOnChain();
     } catch (e) {
-        $('dealVeil').classList.remove('on');
-        toast(short(e));
+        // A failed settle leaves the round Dealt on-chain with the ante committed. Say so
+        // plainly and give a way out, rather than stranding the player on a dead table.
+        showDeadEnd(explain(e));
+    } finally {
+        state.settling = false;
     }
+}
+
+/** Round can't continue — explain why and offer the only useful action. */
+function showDeadEnd(message) {
+    clearInterval(state.timer);
+    $('dealVeil').classList.add('on');
+    $('veilText').innerHTML =
+        `<strong style="color:var(--red)">${message}</strong><br /><br />` +
+        `<button id="btnBail" class="ghost">back to the table</button>`;
+    document.querySelector('.spinner')?.setAttribute('style', 'display:none');
+    setTimeout(() => {
+        const b = $('btnBail');
+        if (b) b.onclick = () => {
+            document.querySelector('.spinner')?.removeAttribute('style');
+            $('dealVeil').classList.remove('on');
+            show('screenLobby');
+        };
+    }, 0);
 }
 
 async function animateReveal() {
@@ -465,7 +566,7 @@ async function resolveOnChain() {
         await refreshCredit();
         finish(payout);
     } catch (e) {
-        toast('resolve failed: ' + short(e));
+        toast('resolve failed: ' + explain(e));
         finish(0);
     }
 }

@@ -35,7 +35,7 @@ specifically**, because Hindsight's core axis is depth into the past:
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
 | `ChartRegistry` | `0x5263dd64098e545235e9184A31aF6aDb4d3AB119` |
-| `GridGame` | `0x6A3d2866A01E7ee66445BaF6f2c7971845B7e7ce` |
+| `GridGame` | `0x5659942E63a62017c11E8668abbD8FbfEb335939` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 Six eras registered: Oct 2021 (the run to the ATH), Luna, the Merge, FTX, the ETF era, peak gas.
