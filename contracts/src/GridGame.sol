@@ -68,6 +68,25 @@ contract GridGame {
     uint256 public constant MULT_SCALE = 1e4;
     uint256 public constant MAX_DRAWDOWN_PCT = 30;
 
+    /**
+     * @dev Simple mode: one bet on whether the final hidden candle closes above the anchor.
+     *
+     * The two sides are NOT priced the same, because the window pool is not a fair coin. Measured
+     * over all 120 registered windows the final candle closes up 65 times and down 55 — 54.2% up.
+     * Paying both sides 1.85x would hand an "always UP" bot 0.542 * 1.85 = 1.003, a house that
+     * loses money to a script with no knowledge at all. Pricing each side against its own measured
+     * frequency keeps every fixed strategy negative:
+     *
+     *   always UP     0.542 * 1.80 = 0.976     always DOWN  0.458 * 2.00 = 0.916
+     *   coin flip     0.500 * 1.90 = 0.950
+     *
+     * A player who actually reads the era can push toward break-even, which is the point — the
+     * knowledge is meant to be worth something. Re-measure with `pnpm sweep-span` if the pool
+     * changes materially; 120 windows puts roughly +/-9% of confidence on that 54.2%.
+     */
+    uint32 public constant DIRECTION_UP_MULT = 18000; // 1.80x
+    uint32 public constant DIRECTION_DOWN_MULT = 20000; // 2.00x
+
     enum RoundState {
         None,
         Dealt, // ante paid, window assigned, awaiting bets
@@ -107,11 +126,20 @@ contract GridGame {
     mapping(uint256 => Round) public rounds;
     mapping(uint256 => Bet[]) public betsOf;
 
+    /// @dev Kept out of Round: that struct already sits close to the stack limit at call sites.
+    struct DirectionBet {
+        bool active;
+        bool up;
+    }
+
+    mapping(uint256 => DirectionBet) public directionBets;
+
     event Deposited(address indexed player, uint256 amount, uint256 balance);
     event Withdrawn(address indexed player, uint256 amount, uint256 balance);
     event BankrollFunded(address indexed from, uint256 amount, uint256 total);
     event RoundDealt(uint256 indexed roundId, address indexed player, bytes32 indexed windowId, uint128 ante, uint64 deadlineBlock);
     event RoundSettled(uint256 indexed roundId, address indexed player, uint256 staked, uint256 maxPayout);
+    event DirectionSettled(uint256 indexed roundId, address indexed player, bool up, uint256 staked, uint256 maxPayout);
     event RoundResolved(uint256 indexed roundId, address indexed player, uint256 payout);
     event RoundExpired(uint256 indexed roundId, address indexed player, uint128 anteForfeited);
     event Paused(string reason);
@@ -294,6 +322,63 @@ contract GridGame {
         emit RoundSettled(roundId, msg.sender, totalStake, maxPayout);
     }
 
+    /**
+     * @notice Simple mode: one bet on the direction of the final hidden candle.
+     * @dev An alternative to settleRound, not an addition — a round settles one way or the other.
+     *      Everything before this point is identical, so the blind deal and the forfeit economics
+     *      that make "pay to look" real are untouched; only the shape of the bet differs.
+     */
+    function settleDirection(uint256 roundId, bool up, uint128 stake) external payable {
+        _creditValue();
+
+        Round storage r = rounds[roundId];
+        if (r.state != RoundState.Dealt) revert WrongRoundState(roundId);
+        if (msg.sender != r.player) revert NotPlayer();
+        if (block.number > deadlineOf(roundId)) revert DecisionWindowClosed(uint64(deadlineOf(roundId)), block.number);
+
+        uint256 limit = maxBet();
+        if (stake == 0 || stake > limit) revert BetTooLarge(stake, limit);
+        if (stake < r.ante) revert StakeBelowAnte(stake, r.ante);
+
+        uint256 maxPayout = (uint256(stake) * uint256(up ? DIRECTION_UP_MULT : DIRECTION_DOWN_MULT)) / MULT_SCALE;
+        uint256 cap = maxRoundExposure();
+        if (maxPayout > cap) revert ExposureTooHigh(maxPayout, cap);
+
+        // the ante is already held; take only the difference
+        uint256 extra = uint256(stake) - uint256(r.ante);
+        if (extra > 0) {
+            uint256 bal = balances[msg.sender];
+            if (extra > bal) revert InsufficientBalance(extra, bal);
+            balances[msg.sender] = bal - extra;
+            bankroll += extra;
+            if (bankroll > bankrollPeak) bankrollPeak = bankroll;
+        }
+
+        directionBets[roundId] = DirectionBet({active: true, up: up});
+        r.staked = stake;
+        r.settledAt = uint64(block.timestamp);
+        r.state = RoundState.Settled;
+
+        emit DirectionSettled(roundId, msg.sender, up, stake, maxPayout);
+    }
+
+    /**
+     * @dev Did the final candle close above the anchor?
+     *
+     * Deliberately NOT derived from bandOf(): that returns -1 whenever the price leaves the grid,
+     * which is 20% of windows in the current pool — exactly the big moves, and precisely the case
+     * where the direction is least ambiguous. Losing the sign there would misresolve one round in
+     * five.
+     *
+     * Compared in sqrtPriceX96 space, so no price is ever materialised. Under `invert` the quote
+     * is token0/token1, so a RISING price is a FALLING sqrtPriceX96 — get this backwards and every
+     * payout inverts.
+     */
+    function _closedUp(bytes32 windowId, uint160 finalSqrtPriceX96) private view returns (bool) {
+        (,, uint160 anchorSqrt,,,,,, bool invert,,) = registry.windows(windowId);
+        return invert ? finalSqrtPriceX96 < anchorSqrt : finalSqrtPriceX96 > anchorSqrt;
+    }
+
     /// @dev Split out of settleRound to keep the stack shallow enough for solc.
     function _priceBets(bytes32 windowId, uint8[] calldata ts, uint8[] calldata ps, uint128[] calldata amounts)
         private
@@ -362,15 +447,9 @@ contract GridGame {
             bands[t] = registry.bandOf(r.windowId, sqrtPrices[t]);
         }
 
-        uint256 payout;
-        Bet[] storage bets = betsOf[roundId];
-        for (uint256 i = 0; i < bets.length; i++) {
-            int256 landed = bands[bets[i].t];
-            if (landed >= 0 && uint256(landed) == uint256(bets[i].p)) {
-                payout += (uint256(bets[i].amount) * uint256(registry.multiplierAt(r.windowId, bets[i].t, bets[i].p)))
-                    / MULT_SCALE;
-            }
-        }
+        uint256 payout = directionBets[roundId].active
+            ? _directionPayout(roundId, r.windowId, r.staked, sqrtPrices[timeSteps - 1])
+            : _gridPayout(roundId, r.windowId, bands);
 
         r.state = RoundState.Resolved;
         r.paidOut = uint128(payout);
@@ -383,6 +462,33 @@ contract GridGame {
 
         _checkDrawdown();
         emit RoundResolved(roundId, r.player, payout);
+    }
+
+    /// @dev Both payout shapes live outside resolveRound; inlining either blows the stack.
+    function _gridPayout(uint256 roundId, bytes32 windowId, int256[] memory bands)
+        private
+        view
+        returns (uint256 payout)
+    {
+        Bet[] storage bets = betsOf[roundId];
+        for (uint256 i = 0; i < bets.length; i++) {
+            int256 landed = bands[bets[i].t];
+            if (landed >= 0 && uint256(landed) == uint256(bets[i].p)) {
+                payout += (uint256(bets[i].amount) * uint256(registry.multiplierAt(windowId, bets[i].t, bets[i].p)))
+                    / MULT_SCALE;
+            }
+        }
+    }
+
+    function _directionPayout(uint256 roundId, bytes32 windowId, uint128 staked, uint160 finalSqrtPriceX96)
+        private
+        view
+        returns (uint256)
+    {
+        // the candle was proven by the caller before this runs
+        bool up = _closedUp(windowId, finalSqrtPriceX96);
+        if (up != directionBets[roundId].up) return 0;
+        return (uint256(staked) * uint256(up ? DIRECTION_UP_MULT : DIRECTION_DOWN_MULT)) / MULT_SCALE;
     }
 
     function _checkDrawdown() private {

@@ -23,7 +23,8 @@
     "register-bulk": "tsx src/register-bulk.ts",
     "gen-reveal-index": "tsx src/gen-reveal-index.ts",
     "sweep-span": "tsx src/sweep-span.ts",
-    "rebuild-grids": "tsx src/rebuild-grids.ts"
+    "rebuild-grids": "tsx src/rebuild-grids.ts",
+    "play-direction": "tsx src/play-direction.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",

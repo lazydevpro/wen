@@ -35,7 +35,7 @@ specifically**, because wen's core axis is depth into the past:
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
 | `ChartRegistry` | `0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61` |
-| `GridGame` | `0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d` |
+| `GridGame` | `0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
@@ -80,6 +80,22 @@ connect wallet → pick an ante → DEAL          (no deposit step — see below
 - **A grid of (time × price) cells** sits over the future, each printed with its multiplier.
 - **Multipliers are computed from the visible candles only** — the odds cannot leak the hidden path.
 - The chart plays forward; cells the real price path crosses pay out.
+
+**Or play it simple.** After the deal you can switch to a two-button game: does the chart end
+higher or lower than the last known price? Less to think about, less to win. The two sides are
+priced differently — **up 1.80×, down 2.00×** — because the pool is not a fair coin: measured over
+all 120 windows the final candle closes up 54.2% of the time. Paying both sides alike would let an
+"always up" bot play at break-even, so each side is priced against its own measured frequency:
+
+| strategy | win rate | EV per 1 CTC |
+|---|---|---|
+| always up | 54.2% | 0.975 |
+| always down | 45.8% | 0.917 |
+| coin flip | 50% | 0.946 |
+
+A player who actually recognises the era can push toward break-even, which is the point — knowing
+the history is meant to be worth something. Both modes share the same deal, clock and forfeit; only
+the shape of the bet differs.
 
 ### Wallet setup is automatic
 
@@ -154,7 +170,7 @@ opposite, both times. Run it yourself: `pnpm --dir worker simulate`, and re-swee
 ## Repo
 
 ```
-contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (37 tests)
+contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (43 tests)
 worker/        TypeScript — indexer, prover, window builder, calibration harness
 web/           Client — canvas chart, multiplier grid, reveal
 faucet-worker/ Cloudflare Worker — hosts the client, the faucet, and gated reveals
@@ -168,7 +184,7 @@ cp .env.example .env       # add DEPLOYER_PRIVATE_KEY + an archive-capable ETH_M
 pnpm --dir worker install
 pnpm --dir contracts install && forge build --root contracts
 
-forge test --root contracts               # 37 tests against real proven mainnet data
+forge test --root contracts               # 43 tests against real proven mainnet data
 pnpm --dir worker spike                   # prove a real swap (needs no CTC — view call)
 pnpm --dir worker bulk-windows            # rebuild the 120-window pool (~15 min of RPC)
 pnpm --dir worker relabel-windows         # honest labels/riddles per slice

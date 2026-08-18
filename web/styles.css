@@ -307,3 +307,26 @@ button { font-family: var(--sans); cursor: pointer; }
     .result-card { margin: 26px auto; padding: 30px 20px; }
     .amount { font-size: 38px; }
 }
+
+/* ───────────────────────── bet mode ─────────────────────────
+   The mode is chosen AFTER the chart is dealt, so it cannot influence which window you get. */
+.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px;
+               background: var(--sunken); border-radius: var(--pill); margin-bottom: 14px; }
+.mode-btn { background: transparent; border: none; border-radius: var(--pill); padding: 7px 0;
+            font-family: var(--mono); font-size: 11px; color: var(--ink-faint); transition: 0.15s; }
+.mode-btn.on { background: var(--blue-wash); color: var(--blue); }
+.mode-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.dir-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 4px; }
+.dir-btn { background: var(--sunken); border: 1px solid var(--hairline-strong); border-radius: 10px;
+           padding: 16px 4px; color: var(--ink); display: flex; flex-direction: column;
+           align-items: center; gap: 4px; transition: 0.15s; font-family: var(--mono); }
+.dir-btn b { font-size: 15px; font-weight: 600; }
+.dir-btn em { font-style: normal; font-size: 11px; color: var(--ink-faint); }
+.dir-btn:hover:not(:disabled) { border-color: var(--blue-edge); }
+/* selection is chrome-blue, never green/red — those stay reserved for the outcome */
+.dir-btn.on { background: var(--blue-wash); border-color: var(--blue); }
+.dir-btn.on em { color: var(--blue); }
+.dir-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+/* in simple mode the grid is context, not a control surface */
+.grid-overlay.dimmed .cell { opacity: 0.25; pointer-events: none; }

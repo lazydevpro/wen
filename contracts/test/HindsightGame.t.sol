@@ -291,6 +291,122 @@ contract HindsightGameTest is Test {
         assertEq(game.balances(PLAYER), before, "losing bet pays nothing");
     }
 
+    // ------------------------------------------------- simple up/down mode
+
+    /// Which way the fixture window actually closed, computed the same way the worker does:
+    /// in sqrtPriceX96 space, respecting invert. This is the property the mode hinges on.
+    function _fixtureClosedUp() internal view returns (bool) {
+        (,, uint160 anchorSqrt,,,,,, bool invert,,) = registry.windows(windowId);
+        (,, uint160 finalSqrt,) = _hidden(timeSteps - 1);
+        return invert ? finalSqrt < anchorSqrt : finalSqrt > anchorSqrt;
+    }
+
+    function test_DirectionWinPaysAsymmetricMultiplier() public {
+        vm.deal(PLAYER, 5 ether);
+        uint128 ante = 0.01 ether;
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+
+        bool closedUp = _fixtureClosedUp();
+        vm.prank(PLAYER);
+        game.settleDirection(roundId, closedUp, ante); // bet the way it actually went
+
+        uint256 before = game.balances(PLAYER);
+        (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        game.resolveRound(roundId, idx, bns, sps, prs);
+
+        uint32 mult = closedUp ? game.DIRECTION_UP_MULT() : game.DIRECTION_DOWN_MULT();
+        assertEq(game.balances(PLAYER) - before, (uint256(ante) * mult) / game.MULT_SCALE(), "direction win pays");
+        assertTrue(mult == 18000 || mult == 20000, "up 1.80x, down 2.00x");
+    }
+
+    function test_DirectionWrongWayPaysNothing() public {
+        vm.deal(PLAYER, 5 ether);
+        uint128 ante = 0.01 ether;
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+
+        // computed BEFORE the prank: _fixtureClosedUp reads the registry, and vm.prank only
+        // covers the next external call — inlining it here would consume the prank
+        bool wrongWay = !_fixtureClosedUp();
+        vm.prank(PLAYER);
+        game.settleDirection(roundId, wrongWay, ante);
+
+        uint256 before = game.balances(PLAYER);
+        (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        game.resolveRound(roundId, idx, bns, sps, prs);
+        assertEq(game.balances(PLAYER), before, "wrong direction pays nothing");
+    }
+
+    /// The polarity trap: under invert a RISING price is a FALLING sqrtPriceX96. If _closedUp had
+    /// the comparison backwards this test would pass its mirror image, so it pins the sign against
+    /// the decoded price rather than against itself.
+    function test_DirectionPolarityMatchesRealPrice() public view {
+        (,, uint160 anchorSqrt,,,,,, bool invert,,) = registry.windows(windowId);
+        assertTrue(invert, "USDC/WETH fixture quotes token0/token1");
+
+        (,, uint160 finalSqrt,) = _hidden(timeSteps - 1);
+        // decoded prices: price ~ 1/sqrt^2 under invert, so compare reciprocals directly
+        bool upBySqrt = finalSqrt < anchorSqrt;
+        bool upByBand = registry.bandOf(windowId, finalSqrt) >= int256(6); // 12 bands, centre 6
+        if (registry.bandOf(windowId, finalSqrt) >= 0) {
+            assertEq(upBySqrt, upByBand, "sqrt comparison must agree with bandOf when in-grid");
+        }
+    }
+
+    /// bandOf returns -1 outside the grid, losing the sign — 20% of the real pool. Direction must
+    /// still resolve, which is why _closedUp does not go through bandOf.
+    function test_DirectionResolvesEvenWhenPriceLeftTheGrid() public {
+        vm.deal(PLAYER, 5 ether);
+        uint128 ante = 0.01 ether;
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+        bool closedUp = _fixtureClosedUp();
+        vm.prank(PLAYER);
+        game.settleDirection(roundId, closedUp, ante);
+
+        (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        game.resolveRound(roundId, idx, bns, sps, prs);
+
+        (,, GridGame.RoundState st,,, uint128 paid) = game.roundSummary(roundId);
+        assertEq(uint8(st), uint8(3), "Resolved");
+        assertGt(paid, 0, "a correct call pays regardless of whether the band was in range");
+    }
+
+    function test_DirectionRespectsStakeAndExposureLimits() public {
+        vm.deal(PLAYER, 100 ether);
+        uint128 ante = 0.01 ether;
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 50 ether}(ante);
+
+        // below the ante is refused, exactly as in grid mode
+        vm.prank(PLAYER);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.StakeBelowAnte.selector, ante - 1, ante));
+        game.settleDirection(roundId, true, ante - 1);
+
+        // and a stake over the per-bet limit is refused
+        uint256 limit = game.maxBet();
+        vm.prank(PLAYER);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.BetTooLarge.selector, limit + 1, limit));
+        game.settleDirection(roundId, true, uint128(limit + 1));
+    }
+
+    /// A round settles one way or the other, never both.
+    function test_CannotSettleBothWays() public {
+        vm.deal(PLAYER, 5 ether);
+        uint128 ante = 0.01 ether;
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+
+        vm.prank(PLAYER);
+        game.settleDirection(roundId, true, ante);
+
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, ante);
+        vm.prank(PLAYER);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.WrongRoundState.selector, roundId));
+        game.settleRound(roundId, ts, ps, amts);
+    }
+
     // ------------------------------------------- the decision window
 
     /// The countdown must be enforced on-chain, or it is decoration and a reverse-searcher

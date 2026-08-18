@@ -36,7 +36,7 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d';
+const GRID_GAME = '0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A';
 const REGISTRY = '0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61';
 
 const GAME_ABI = [
@@ -48,6 +48,10 @@ const GAME_ABI = [
     'function DECISION_BLOCKS() external view returns (uint256)',
     'function startRound(uint128 ante) external payable returns (uint256,bytes32)',
     'function settleRound(uint256 roundId,uint8[] ts,uint8[] ps,uint128[] amounts) external payable',
+    'function settleDirection(uint256 roundId,bool up,uint128 stake) external payable',
+    'function DIRECTION_UP_MULT() external view returns (uint32)',
+    'function DIRECTION_DOWN_MULT() external view returns (uint32)',
+    'event DirectionSettled(uint256 indexed roundId,address indexed player,bool up,uint256 staked,uint256 maxPayout)',
     'function resolveRound(uint256 roundId,uint256[] indices,uint64[] blockNumbers,uint160[] sqrtPrices,bytes32[][] proofs) external',
     'function roundSummary(uint256) external view returns (address,bytes32,uint8,uint128,uint128,uint128)',
     'function deadlineOf(uint256) external view returns (uint256)',
@@ -108,6 +112,11 @@ function explain(e) {
 }
 
 const DECISION_SECONDS = 45;
+/**
+ * Mirrors GridGame.DIRECTION_*_MULT. Asymmetric on purpose: the window pool closes up 54.2% of
+ * the time, so paying both sides alike would let an always-up bot play at break-even.
+ */
+const DIR_MULT = {up: 1.8, down: 2.0};
 const ANTES = [0.5, 1, 2, 5];
 const STAKES = [0.5, 1, 2, 5];
 
@@ -151,6 +160,8 @@ const state = {
     stakeIdx: 1,
     anteIdx: 1,
     picks: new Map(),
+    mode: 'grid',        // 'grid' | 'simple' — chosen after the deal, never before
+    dir: null,           // true = up, false = down
     maxBet: 0,
     maxExposure: 0,
     phase: PHASE.IDLE,
@@ -447,6 +458,8 @@ async function deal() {
     if (!state.game) return connect();
     if (state.phase !== PHASE.IDLE && state.phase !== PHASE.RESULT) return;
     state.picks.clear();
+    state.mode = 'grid';
+    state.dir = null;
     state.reveal = null;
     state.guessed = false;
     state.win = null;
@@ -500,6 +513,11 @@ function openTable() {
     $('stakeValue').textContent = state.stake;
 
     buildGrid();
+    $('modeGrid').classList.add('on');
+    $('modeSimple').classList.remove('on');
+    $('paneGrid').hidden = false;
+    $('paneSimple').hidden = true;
+    $('gridOverlay').classList.remove('dimmed');
     syncBets();
     $('dealVeil').classList.remove('on');
 
@@ -573,10 +591,19 @@ function togglePick(t, p, mult) {
     syncBets();
 }
 
-const totalStaked = () => [...state.picks.values()].reduce((a, b) => a + b.stake, 0);
-const maxWin = () => [...state.picks.values()].reduce((a, b) => a + b.stake * b.mult, 0);
+// both modes settle through the same result screen, so these have to answer for either
+const dirMult = () => (state.dir ? DIR_MULT.up : DIR_MULT.down);
+const totalStaked = () =>
+    state.mode === 'simple'
+        ? (state.dir === null ? 0 : state.stake)
+        : [...state.picks.values()].reduce((a, b) => a + b.stake, 0);
+const maxWin = () =>
+    state.mode === 'simple'
+        ? (state.dir === null ? 0 : state.stake * dirMult())
+        : [...state.picks.values()].reduce((a, b) => a + b.stake * b.mult, 0);
 
 function syncBets() {
+    if (state.mode === 'simple') return syncSimple();
     // A cell's max stake is exposureCap / multiplier. Long-shot cells can therefore take far
     // less than the ante, which is exactly what stranded early testers: they picked a 250x
     // cell, the contract refused, and the clock ate the ante. Mark them up front.
@@ -629,6 +656,70 @@ function syncBets() {
     else btn.textContent = 'lock in bets';
 }
 
+/** syncBets for the two-button game. Same limits, one bet. */
+function syncSimple() {
+    $('stakeValueSimple').textContent = state.stake;
+    const mult = state.dir === null ? 0 : state.dir ? DIR_MULT.up : DIR_MULT.down;
+    const staked = state.dir === null ? 0 : state.stake;
+    const worst = staked * mult;
+
+    $('totalStaked').textContent = staked.toFixed(2);
+    $('maxWin').textContent = worst.toFixed(1);
+
+    const overBet = staked > state.maxBet;
+    const overExposure = state.maxExposure > 0 && worst > state.maxExposure;
+    const underAnte = state.dir !== null && staked < state.ante;
+
+    $('maxWin').classList.toggle('over', overExposure);
+    for (const id of ['dirUp', 'dirDown']) $(id).disabled = state.phase !== PHASE.BETTING;
+
+    const btn = $('btnLockIn');
+    btn.disabled = state.dir === null || underAnte || overExposure || overBet;
+    if (state.dir === null) btn.textContent = 'pick up or down';
+    else if (overBet) btn.textContent = `max ${state.maxBet.toFixed(1)} CTC`;
+    else if (overExposure) btn.textContent = `stake lower — max win over ${state.maxExposure.toFixed(0)} CTC`;
+    else if (underAnte) btn.textContent = `stake at least ${state.ante} CTC`;
+    else btn.textContent = `lock in ${state.dir ? 'up' : 'down'} · ${state.stake} CTC`;
+}
+
+// ─────────────────────────────────────────────────────── bet mode
+
+/**
+ * Switch between the grid and the two-button game.
+ *
+ * Only reachable while BETTING, and it clears the other mode's selection — a round settles one
+ * way or the other on-chain, so letting both hold picks would show a max-win that cannot happen.
+ */
+function setMode(mode) {
+    if (state.phase !== PHASE.BETTING) return;
+    state.mode = mode;
+    state.picks.clear();
+    state.dir = null;
+
+    $('modeGrid').classList.toggle('on', mode === 'grid');
+    $('modeSimple').classList.toggle('on', mode === 'simple');
+    $('modeGrid').setAttribute('aria-selected', String(mode === 'grid'));
+    $('modeSimple').setAttribute('aria-selected', String(mode === 'simple'));
+    $('paneGrid').hidden = mode !== 'grid';
+    $('paneSimple').hidden = mode === 'grid';
+    $('gridOverlay').classList.toggle('dimmed', mode === 'simple');
+
+    $('oddsNote').innerHTML = mode === 'grid'
+        ? 'Multipliers come from the <strong>visible</strong> candles only — the odds cannot leak the hidden path.'
+        : 'Up pays less because the pool drifts up: <strong>54%</strong> of windows close higher. Read the era and the edge is yours.';
+
+    document.querySelectorAll('.cell.picked').forEach((el) => el.classList.remove('picked'));
+    syncBets();
+}
+
+function pickDirection(up) {
+    if (state.phase !== PHASE.BETTING) return;
+    state.dir = state.dir === up ? null : up;   // tapping the same side again clears it
+    $('dirUp').classList.toggle('on', state.dir === true);
+    $('dirDown').classList.toggle('on', state.dir === false);
+    syncBets();
+}
+
 // ─────────────────────────────────────────────────────── settle + resolve
 
 async function lockIn() {
@@ -636,7 +727,7 @@ async function lockIn() {
     // twice and the second transaction reverts on an already-settled round.
     // The button and the expiring clock can both reach here; only one may proceed.
     if (state.phase !== PHASE.BETTING) return;
-    if (state.picks.size === 0) return;
+    if (state.mode === 'simple' ? state.dir === null : state.picks.size === 0) return;
     setPhase(PHASE.SETTLING);
     clearInterval(state.timer);
 
@@ -644,6 +735,7 @@ async function lockIn() {
     const ts = bets.map((b) => b.t);
     const ps = bets.map((b) => b.p);
     const amts = bets.map((b) => parseEther(String(b.stake)));
+    const simple = state.mode === 'simple';
 
     $('btnLockIn').disabled = true;
     $('dealVeil').classList.add('on');
@@ -652,9 +744,11 @@ async function lockIn() {
     try {
         // the contract deducts (totalStake - ante); attach whatever credit doesn't cover
         const anteWei = parseEther(String(state.ante));
-        const stakeWei = amts.reduce((a, b) => a + b, 0n);
+        const stakeWei = simple ? parseEther(String(state.stake)) : amts.reduce((a, b) => a + b, 0n);
         const extra = stakeWei > anteWei ? stakeWei - anteWei : 0n;
-        const tx = await state.game.settleRound(state.roundId, ts, ps, amts, {value: shortfall(extra)});
+        const tx = simple
+            ? await state.game.settleDirection(state.roundId, state.dir, stakeWei, {value: shortfall(extra)})
+            : await state.game.settleRound(state.roundId, ts, ps, amts, {value: shortfall(extra)});
         $('veilText').textContent = 'bets locked in — revealing…';
         await tx.wait();
         await refreshCredit();
@@ -765,6 +859,22 @@ function finish(payout) {
     $('resultVerdict').className = 'verdict ' + (net > 0 ? 'won' : 'lost');
     $('resultAmount').textContent = (net >= 0 ? '+' : '') + net.toFixed(2) + ' CTC';
     $('resultEra').innerHTML = `This was <strong>${state.reveal.eraLabel}</strong>.<br />${state.win.riddle}`;
+
+    if (state.mode === 'simple') {
+        // the direction is decided by the FINAL candle against the anchor, not by any band
+        const closed = state.reveal.hidden[state.reveal.hidden.length - 1].c;
+        const wentUp = closed > state.win.anchorPrice;
+        const right = wentUp === state.dir;
+        $('resultBreakdown').innerHTML =
+            `<div><span>you said ${state.dir ? 'up' : 'down'} @ ${dirMult().toFixed(2)}×</span>` +
+            `<span class="${right ? 'w' : 'l'}">${right ? '+' + payout.toFixed(2) : '−' + staked.toFixed(1)}</span></div>` +
+            `<div><span>closed ${wentUp ? 'above' : 'below'} $${state.win.anchorPrice.toFixed(2)}</span>` +
+            `<span>$${closed.toFixed(2)}</span></div>`;
+        recordScore(state.reveal.eraLabel, net);
+        setPhase(PHASE.RESULT);
+        show('screenResult');
+        return;
+    }
 
     $('resultBreakdown').innerHTML = [...state.picks.values()]
         .map((b) => {
@@ -922,6 +1032,10 @@ function wireControls() {
     $('btnWithdraw').onclick = doWithdraw;
     $('btnDeal').onclick = deal;
     $('btnLockIn').onclick = lockIn;
+    $('modeGrid').onclick = () => setMode('grid');
+    $('modeSimple').onclick = () => setMode('simple');
+    $('dirUp').onclick = () => pickDirection(true);
+    $('dirDown').onclick = () => pickDirection(false);
     $('btnAgain').onclick = () => { setPhase(PHASE.IDLE); refreshFaucet(); show('screenLobby'); };
     $('btnGuess').onclick = checkGuess;
     $('guessInput').addEventListener('keydown', (e) => e.key === 'Enter' && checkGuess());

@@ -103,22 +103,48 @@
 
       <div class="divider"></div>
 
-      <div class="panel-head"><span class="tag">your bets</span></div>
-      <div id="betList" class="bet-list"><p class="muted">Tap cells on the grid →</p></div>
-      <div class="stake-row">
-        <label>stake / cell</label>
-        <div class="stepper">
-          <button data-stake="-" class="ghost">−</button>
-          <span id="stakeValue">1</span>
-          <button data-stake="+" class="ghost">+</button>
+      <!-- Same deal, same clock, same forfeit — only the shape of the bet differs. -->
+      <div class="mode-switch" role="tablist" aria-label="bet mode">
+        <button id="modeGrid" class="mode-btn on" role="tab" aria-selected="true">grid</button>
+        <button id="modeSimple" class="mode-btn" role="tab" aria-selected="false">up / down</button>
+      </div>
+
+      <div id="paneGrid">
+        <div class="panel-head"><span class="tag">your bets</span></div>
+        <div id="betList" class="bet-list"><p class="muted">Tap cells on the grid →</p></div>
+        <div class="stake-row">
+          <label>stake / cell</label>
+          <div class="stepper">
+            <button data-stake="-" class="ghost">−</button>
+            <span id="stakeValue">1</span>
+            <button data-stake="+" class="ghost">+</button>
+          </div>
         </div>
       </div>
+
+      <div id="paneSimple" hidden>
+        <div class="panel-head"><span class="tag">where does it end?</span></div>
+        <p class="muted">Higher or lower than the last known price, when the chart runs out.</p>
+        <div class="dir-grid">
+          <button id="dirUp" class="dir-btn"><b>▲ up</b><em>1.80×</em></button>
+          <button id="dirDown" class="dir-btn"><b>▼ down</b><em>2.00×</em></button>
+        </div>
+        <div class="stake-row">
+          <label>stake</label>
+          <div class="stepper">
+            <button data-stake="-" class="ghost">−</button>
+            <span id="stakeValueSimple">1</span>
+            <button data-stake="+" class="ghost">+</button>
+          </div>
+        </div>
+      </div>
+
       <div class="totals">
         <div><label>staked</label><span id="totalStaked">0</span></div>
         <div><label>max win</label><span id="maxWin" class="win">0</span></div>
       </div>
       <button id="btnLockIn" class="primary" disabled>lock in bets</button>
-      <p class="fineprint">
+      <p class="fineprint" id="oddsNote">
         Multipliers come from the <strong>visible</strong> candles only —
         the odds cannot leak the hidden path.
       </p>
