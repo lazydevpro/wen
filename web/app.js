@@ -265,6 +265,22 @@ function renderAnteGrid() {
     $('decisionHint').textContent = `${DECISION_SECONDS} seconds`;
 }
 
+// ─────────────────────────────────────────────────────── reveal
+
+/**
+ * The answer never ships as a static file — it would be one fetch away, and knowing the
+ * hidden path before betting is the whole game. The server hands it over only once this
+ * round is Settled on-chain, which is to say only once the bets can no longer change.
+ */
+async function fetchReveal(id, roundId) {
+    const r = await fetch(`/api/reveal/${id}?roundId=${roundId}`);
+    if (!r.ok) {
+        const {error} = await r.json().catch(() => ({}));
+        throw new Error(error ?? 'could not load the reveal');
+    }
+    return r.json();
+}
+
 // ─────────────────────────────────────────────────────── faucet
 
 /** Invite code travels in the URL so the link can just be shared: ...?code=abc */
@@ -560,7 +576,7 @@ async function lockIn() {
         await tx.wait();
         await refreshCredit();
 
-        state.reveal = await (await fetch(`data/${state.win.id}.reveal.json`)).json();
+        state.reveal = await fetchReveal(state.win.id, state.roundId);
         $('dealVeil').classList.remove('on');
         await animateReveal();
         await resolveOnChain();

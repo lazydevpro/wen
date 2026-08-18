@@ -19,7 +19,7 @@ import 'dotenv/config';
 import {createServer} from 'node:http';
 import {readFile, readFileSync, writeFileSync, existsSync, mkdirSync} from 'node:fs';
 import {extname, join, normalize} from 'node:path';
-import {formatEther, isAddress, JsonRpcProvider, parseEther, Wallet, getAddress} from 'ethers';
+import {Contract, formatEther, isAddress, JsonRpcProvider, parseEther, Wallet, getAddress} from 'ethers';
 
 const PORT = Number(process.env.PORT ?? 5173);
 const WEB_ROOT = new URL('../../web/', import.meta.url).pathname;
@@ -193,9 +193,49 @@ async function handleClaim(req: any, res: any, url: URL) {
     }
 }
 
+/**
+ * Gated reveal — mirrors faucet-worker/src/reveal.ts so local and deployed behave identically.
+ *
+ * The reveal holds the hidden future path, so it is released only once the round asking for it is
+ * Settled on-chain and was actually dealt this window. Serving these as plain files put the answer
+ * one fetch away from any player.
+ */
+const GAME_ABI = [
+    'function rounds(uint256) view returns (address player, bytes32 windowId, uint8 state, uint64 startBlock, uint64 settledAt, uint128 ante, uint128 staked, uint128 paidOut)',
+];
+const STATE_SETTLED = 2;
+
+async function handleReveal(res: any, url: URL, id: string) {
+    const file = join(WEB_ROOT, 'data', `${id}.reveal.json`);
+    if (!existsSync(file)) return json(res, 404, {error: 'unknown window'});
+
+    const windows = JSON.parse(readFileSync(join(WEB_ROOT, 'data', 'windows.json'), 'utf8'));
+    const win = windows.find((w: any) => w.id === id);
+    if (!win) return json(res, 404, {error: 'unknown window'});
+
+    const roundIdRaw = url.searchParams.get('roundId') ?? '';
+    if (!/^\d+$/.test(roundIdRaw) || roundIdRaw === '0') return json(res, 400, {error: 'roundId required'});
+
+    const game = new Contract(process.env.GRID_GAME_ADDRESS!, GAME_ABI, provider);
+    let round: any;
+    try {
+        round = await game.rounds(BigInt(roundIdRaw));
+    } catch {
+        return json(res, 502, {error: 'could not read the round on-chain'});
+    }
+
+    if (Number(round.state) < STATE_SETTLED) return json(res, 403, {error: 'bets are not locked in yet'});
+    if (String(round.windowId).toLowerCase() !== String(win.windowId).toLowerCase()) {
+        return json(res, 403, {error: 'that round was not dealt this window'});
+    }
+    return json(res, 200, JSON.parse(readFileSync(file, 'utf8')));
+}
+
 function serveStatic(req: any, res: any, url: URL) {
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/' || rel === '') rel = '/index.html';
+    // Match the deployed setup, where these are never uploaded as public assets.
+    if (rel.endsWith('.reveal.json')) return json(res, 404, {error: 'not found'});
     // keep the path inside WEB_ROOT
     const safe = normalize(rel).replace(/^(\.\.[/\\])+/, '');
     const file = join(WEB_ROOT, safe);
@@ -221,6 +261,8 @@ const server = createServer(async (req, res) => {
     try {
         if (url.pathname === '/api/faucet/status') return await handleStatus(res, url);
         if (url.pathname === '/api/faucet') return await handleClaim(req, res, url);
+        const reveal = url.pathname.match(/^\/api\/reveal\/([a-z0-9-]+)$/);
+        if (reveal) return await handleReveal(res, url, reveal[1]);
         return serveStatic(req, res, url);
     } catch (e: any) {
         console.error('server error:', e);

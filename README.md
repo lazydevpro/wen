@@ -126,10 +126,11 @@ opposite. Run it yourself: `pnpm --dir worker simulate`.
 ## Repo
 
 ```
-contracts/   Foundry — ChartVerifier, ChartRegistry, GridGame  (33 tests)
-worker/      TypeScript — indexer, prover, window builder, calibration harness
-web/         Client — canvas chart, multiplier grid, reveal
-docs/        Spec, Attestcoin integration, research
+contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (33 tests)
+worker/        TypeScript — indexer, prover, window builder, calibration harness
+web/           Client — canvas chart, multiplier grid, reveal
+faucet-worker/ Cloudflare Worker — hosts the client, the faucet, and gated reveals
+docs/          Spec, Attestcoin integration, research
 ```
 
 ## Running it
@@ -151,9 +152,23 @@ pnpm --dir worker serve                   # play it — http://localhost:5173
 An **archive-capable** Ethereum RPC is required — historical eras are unreachable otherwise. Free
 tiers work but cap `eth_getLogs` at a 10-block range, which the indexer chunks around.
 
+## Hosting
+
+Deployed as a single Cloudflare Worker: **https://hindsight.lazydevpro.workers.dev**
+
+```bash
+cd faucet-worker && npm install
+npx wrangler secret put FAUCET_PRIVATE_KEY   # dedicated key, never the deployer's
+npx wrangler secret put FAUCET_CODE
+npx wrangler deploy
+```
+
+The client is static, so `run_worker_first: ["/api/*"]` keeps the Worker out of the path for
+everything except the API — the chart and window data come off the edge and spend no Worker CPU.
+`npm run dev` runs the whole thing locally against real CC3.
+
 ## The faucet
 
-`pnpm serve` hosts the client *and* a faucet from one process, so there is a single link to share.
 A new player needs nothing at all: **20 CTC per address per 24h**, and the server pays the gas.
 
 That last part is why this is a server and not a `Faucet.sol`. A brand-new wallet holds zero CTC,
@@ -163,7 +178,7 @@ who is already funded. Moving it off-chain removes the bootstrap problem entirel
 Share the link with the invite code appended; the client reads `?code=` and passes it through:
 
 ```
-http://<host>:5173/?code=<FAUCET_CODE>
+https://hindsight.lazydevpro.workers.dev/?code=<FAUCET_CODE>
 ```
 
 Guards, in the order that they actually matter:
@@ -175,13 +190,36 @@ Guards, in the order that they actually matter:
 | `FAUCET_DAILY_CAP` | 500 CTC | a bug or a spray emptying the wallet |
 | `FAUCET_IP_HOURLY` | 5 | trivial multi-address abuse |
 
-The cooldown ledger is persisted to `worker/data/faucet.json` (gitignored — it holds player
-addresses), so a restart does not hand everyone a fresh claim. A claim reserves its slot *before*
-the transfer is broadcast and hands it back if the send fails, so a slow confirmation cannot be
-raced into a double claim.
+State lives in a **Durable Object**, not KV. The job is "has this address already been paid?", and
+KV is eventually consistent — two requests landing in different colos can both read "no claim yet"
+and both pay out. A Durable Object routes every claim to one instance. Being single-threaded is
+still not enough on its own, because every `await` is a yield point, so the whole check-then-pay
+sequence runs inside `blockConcurrencyWhile`. That also serialises the nonce, which ethers derives
+from `eth_getTransactionCount` — two concurrent sends would otherwise reuse one and lose a
+transaction. Verified: eight simultaneous claims for one address pay out exactly once.
 
-Use a **dedicated** `FAUCET_PRIVATE_KEY`, never the deployer's — it is a hot key sitting in a web
-process, and it should not be able to touch the game bankroll if it leaks.
+The lock is held across the broadcast but not across confirmation, so claims don't queue a block
+deep behind each other. A claim reserves its slot *before* broadcasting and hands it back if the
+send fails.
+
+Use a **dedicated** `FAUCET_PRIVATE_KEY`, never the deployer's — it is a hot key in a web process
+and should not be able to touch the game bankroll if it leaks.
+
+## Why the answers aren't static files
+
+Each `web/data/*.reveal.json` holds `eraLabel`, the accepted `answers`, and `hidden` — the future
+price path, which is to say the winning band. Served as static assets they were one fetch away:
+`windows.json` lists every window id, so `data/<id>.reveal.json` handed over the answer before a
+single bet was placed. That is strictly worse than the reverse-image-search the decision timer
+exists to prevent, and it only became exploitable once there was a public URL.
+
+So they are excluded from upload (`web/.assetsignore`), bundled into the Worker, and released
+through `/api/reveal/:id?roundId=N` only once that round is `Settled` on-chain — meaning the bets
+are committed and can no longer change.
+
+**Known residual:** there are only six windows. Settling six minimum rounds harvests the whole
+catalogue, after which every hand is known. The gate raises the cost from "free and instant" to
+"six antes", but the real fix is many more windows, not a cleverer gate.
 
 ## Scope and honesty
 

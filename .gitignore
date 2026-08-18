@@ -29,3 +29,7 @@ worker/data/
 .vscode/
 .idea/
 *.log
+
+# Wrangler local secrets
+.dev.vars
+.wrangler/

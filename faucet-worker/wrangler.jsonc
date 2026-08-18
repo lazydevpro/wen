@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hindsight",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  // ethers reaches for Node builtins (crypto, buffer) when signing.
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The game client is plain static files one directory up. `run_worker_first` keeps
+  // the Worker out of the path for everything except the API, so the chart, CSS and
+  // window data are served straight from Cloudflare's edge.
+  "assets": {
+    "directory": "../web",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // One Durable Object serialises every claim. See src/faucet-do.ts for why KV is
+  // not good enough here.
+  "durable_objects": {
+    "bindings": [{"name": "FAUCET", "class_name": "FaucetDO"}]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["FaucetDO"]}],
+
+  "observability": {"enabled": true},
+
+  // Public config. Secrets (FAUCET_PRIVATE_KEY, FAUCET_CODE) are set with
+  // `wrangler secret put` and never live in this file.
+  "vars": {
+    "CC3_RPC_URL": "https://rpc.cc3-testnet.creditcoin.network",
+    "CC3_CHAIN_ID": "102031",
+    "GRID_GAME_ADDRESS": "0x5659942E63a62017c11E8668abbD8FbfEb335939",
+    "FAUCET_DRIP": "20",
+    "FAUCET_DAILY_CAP": "500",
+    "FAUCET_IP_HOURLY": "5"
+  }
+}
