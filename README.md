@@ -176,20 +176,26 @@ That last part is why this is a server and not a `Faucet.sol`. A brand-new walle
 so it cannot pay gas to call a faucet contract — an on-chain faucet can only ever top up someone
 who is already funded. Moving it off-chain removes the bootstrap problem entirely.
 
-Share the link with the invite code appended; the client reads `?code=` and passes it through:
+The faucet is open — no invite code, nothing to paste. Just share the link:
 
 ```
-https://wen.lazydevpro.workers.dev/?code=<FAUCET_CODE>
+https://wen.lazydevpro.workers.dev
 ```
 
 Guards, in the order that they actually matter:
 
 | Guard | Default | Stops |
 | --- | --- | --- |
-| `FAUCET_CODE` | required | randoms who find the URL |
-| per-address cooldown | 24h | one player draining it |
-| `FAUCET_DAILY_CAP` | 500 CTC | a bug or a spray emptying the wallet |
-| `FAUCET_IP_HOURLY` | 5 | trivial multi-address abuse |
+| `FAUCET_DAILY_CAP` | 2000 CTC | a bug or a spray emptying the wallet |
+| `FAUCET_IP_HOURLY` | 10 | farming from one machine |
+| per-address cooldown | 24h | an honest player taking more than their share |
+| `FAUCET_CODE` | unset | if set, gates the faucet behind `?code=` |
+
+That ordering is deliberate and worth reading. **The 24h cooldown protects nothing against a
+determined actor** — it is keyed on address, and generating a thousand fresh addresses takes about
+a second. It constrains honest players and no one else. The daily cap is the only real ceiling on
+what a bad day can cost, and the per-IP limit is what makes farming tedious enough not to bother.
+Set `FAUCET_CODE` again if the faucet ever needs to be friends-only.
 
 State lives in a **Durable Object**, not KV. The job is "has this address already been paid?", and
 KV is eventually consistent — two requests landing in different colos can both read "no claim yet"

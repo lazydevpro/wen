@@ -25,14 +25,23 @@
 
   "observability": {"enabled": true},
 
-  // Public config. Secrets (FAUCET_PRIVATE_KEY, FAUCET_CODE) are set with
-  // `wrangler secret put` and never live in this file.
+  // Public config. The only secret is FAUCET_PRIVATE_KEY, set with `wrangler secret put`
+  // and never in this file.
+  //
+  // There is no invite code any more, so the faucet is open to anyone with the link. The
+  // per-address 24h cooldown does NOT protect the wallet — fresh addresses are free to
+  // generate — so these two numbers are the real backstop:
+  //   FAUCET_DAILY_CAP  ceiling on a single day's total drain, whatever else goes wrong
+  //   FAUCET_IP_HOURLY  the friction that makes farming from one machine tedious
+  // 2000/day is 100 drips, which is far more than a demo needs, and caps a worst case at
+  // roughly a fifth of the balance per day. 10/hour lets a room of friends on one WiFi all
+  // claim at once without the last of them being refused.
   "vars": {
     "CC3_RPC_URL": "https://rpc.cc3-testnet.creditcoin.network",
     "CC3_CHAIN_ID": "102031",
     "GRID_GAME_ADDRESS": "0x5659942E63a62017c11E8668abbD8FbfEb335939",
     "FAUCET_DRIP": "20",
-    "FAUCET_DAILY_CAP": "500",
-    "FAUCET_IP_HOURLY": "5"
+    "FAUCET_DAILY_CAP": "2000",
+    "FAUCET_IP_HOURLY": "10"
   }
 }
