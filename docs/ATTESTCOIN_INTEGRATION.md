@@ -44,7 +44,7 @@ for live data and not at all for transactions from 2022.
 | `EvmV1Decoder` (library) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
 | `ChartRegistry` | `0x5263dd64098e545235e9184A31aF6aDb4d3AB119` |
-| `GridGame` | `0x5084738D7e8c30B5a39A2AE1DE13f1B54b2c376D` |
+| `GridGame` | `0x6A3d2866A01E7ee66445BaF6f2c7971845B7e7ce` |
 
 Precompiles used: BlockProver `0x…0FD2`, ChainInfo `0x…0FD3`. Source chain: Ethereum mainnet,
 **chainKey 3**.
@@ -176,5 +176,5 @@ pnpm --dir worker spike:batch      # batch proof economics
 pnpm --dir worker spike:hist       # prove five eras, 2021 -> 2024
 pnpm --dir worker prove-candles luna-2022 8
 pnpm --dir worker verify-onchain   # read candles back, compare to Ethereum
-forge test --root contracts        # 28 tests
+forge test --root contracts        # 33 tests
 ```

@@ -2,8 +2,9 @@
 
 **Bet on what already happened.**
 
-You're shown a slice of Ethereum's real price history — but not told when it is. A riddle hints at
-the era. Work out where you are, then bet on where the chart goes next.
+You ante up and are dealt a random slice of Ethereum's real price history — but not told when it
+is. A riddle is your only clue. Work out where you are, then bet on where the chart goes next.
+You get 45 seconds.
 
 Every candle is a real Uniswap V3 swap, cryptographically proven onto Creditcoin through the
 Attestcoin Protocol. Nothing is simulated.
@@ -34,7 +35,7 @@ specifically**, because Hindsight's core axis is depth into the past:
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
 | `ChartRegistry` | `0x5263dd64098e545235e9184A31aF6aDb4d3AB119` |
-| `GridGame` | `0x5084738D7e8c30B5a39A2AE1DE13f1B54b2c376D` |
+| `GridGame` | `0x6A3d2866A01E7ee66445BaF6f2c7971845B7e7ce` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 Six eras registered: Oct 2021 (the run to the ATH), Luna, the Merge, FTX, the ETF era, peak gas.
@@ -112,7 +113,7 @@ opposite. Run it yourself: `pnpm --dir worker simulate`.
 ## Repo
 
 ```
-contracts/   Foundry — ChartVerifier, ChartRegistry, GridGame  (28 tests)
+contracts/   Foundry — ChartVerifier, ChartRegistry, GridGame  (33 tests)
 worker/      TypeScript — indexer, prover, window builder, calibration harness
 web/         Client — canvas chart, multiplier grid, reveal
 docs/        Spec, Attestcoin integration, research
@@ -125,7 +126,7 @@ cp .env.example .env       # add DEPLOYER_PRIVATE_KEY + an archive-capable ETH_M
 pnpm --dir worker install
 pnpm --dir contracts install && forge build --root contracts
 
-forge test --root contracts               # 28 tests against real proven mainnet data
+forge test --root contracts               # 33 tests against real proven mainnet data
 pnpm --dir worker spike                   # prove a real swap (needs no CTC — view call)
 pnpm --dir worker build-window all        # rebuild all six eras from Ethereum
 pnpm --dir worker simulate                # house-edge calibration
@@ -147,6 +148,8 @@ tiers work but cap `eth_getLogs` at a 10-block range, which the indexer chunks a
   old takes two years.
 - **On-chain price data starts ~2021** (Uniswap V3 launched May 2021), so pre-2021 eras are not
   reachable via swaps.
-- **A player who pattern-matches the candle series against public price history can identify the
-  window.** That is accepted rather than defended against — era identification is the intended
-  mechanic, and the riddle makes it explicit.
+- **Reverse-searching the chart is priced, not prevented.** A prepared attacker can screenshot the
+  canvas and cross-correlate it against public price history in seconds. What the design does is
+  make that cost something: the ante is already committed before the chart appears, the catalogue
+  is never shown, and the on-chain decision window is ~2 minutes. Against a determined bot this is
+  a tax rather than a wall — the actual answer is the wallet-age and behavioural layers in the spec.
