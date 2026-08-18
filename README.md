@@ -41,7 +41,13 @@ specifically**, because wen's core axis is depth into the past:
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
 peak gas, the London fork, the run to the ATH and the top, Luna, the lender freezes, the Merge,
 FTX, capitulation, the USDC depeg, Shapella, the SEC suits, the 2023 quiet, both ETF approvals,
-the carry unwind and the election. No two windows share a candle.
+the carry unwind and the election.
+
+The 114 generated slices are strictly non-overlapping — no two share a candle. Six earlier
+windows predate the pool, were built from hand-picked start blocks, and overlap the slices of
+their own era; they stay because they are already registered and `ChartRegistry` has no removal
+path. So 12 of 7,140 window pairs share some candles. Worth knowing rather than claiming
+otherwise, and it would be cleaned up by the next registry deployment.
 
 ## How it works
 
