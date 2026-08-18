@@ -190,6 +190,67 @@ contract HindsightGameTest is Test {
         game.startRound(0.1 ether);
     }
 
+    // ------------------------------------------------- payable entry points
+
+    /// The friction this kills: a brand-new wallet should go faucet -> deal, no deposit step.
+    function test_StartRoundWithValueNeedsNoDeposit() public {
+        vm.deal(PLAYER, 1 ether);
+        assertEq(game.balances(PLAYER), 0, "no credit at all");
+
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 0.1 ether}(0.1 ether);
+
+        (address player,, uint8 state, uint128 ante) = _round(roundId);
+        assertEq(player, PLAYER);
+        assertEq(state, uint8(1), "Dealt");
+        assertEq(ante, 0.1 ether);
+        assertEq(game.balances(PLAYER), 0, "value credited then consumed by the ante");
+    }
+
+    /// Over-attaching must never lose money — the excess stays as withdrawable credit,
+    /// so the client does not have to compute an exact shortfall.
+    function test_StartRoundValueExcessStaysAsCredit() public {
+        vm.deal(PLAYER, 2 ether);
+        vm.prank(PLAYER);
+        game.startRound{value: 1 ether}(0.1 ether);
+        assertEq(game.balances(PLAYER), 0.9 ether, "excess is credit, not a donation");
+    }
+
+    /// Attached value merely tops up the balance; short is still short, and the revert
+    /// refunds the attached value with the rest of the transaction.
+    function test_StartRoundWithInsufficientValueReverts() public {
+        vm.deal(PLAYER, 1 ether);
+        vm.prank(PLAYER);
+        vm.expectRevert(abi.encodeWithSelector(GridGame.InsufficientBalance.selector, 0.1 ether, 0.01 ether));
+        game.startRound{value: 0.01 ether}(0.1 ether);
+        assertEq(PLAYER.balance, 1 ether, "reverted value came back");
+        assertEq(game.balances(PLAYER), 0, "nothing sticks on revert");
+    }
+
+    /// The stake above the ante can also arrive as attached value at settle time.
+    function test_SettleRoundWithValueCoversShortfall() public {
+        vm.deal(PLAYER, 1 ether);
+        vm.prank(PLAYER);
+        (uint256 roundId,) = game.startRound{value: 0.01 ether}(0.01 ether);
+
+        uint8 winning = uint8(uint256(expectedBands[0]));
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, winning, 0.03 ether);
+
+        // credit is 0 and the extra beyond the ante is 0.02 — attach exactly that
+        vm.prank(PLAYER);
+        game.settleRound{value: 0.02 ether}(roundId, ts, ps, amts);
+
+        (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        game.resolveRound(roundId, idx, bns, sps, prs);
+
+        uint32 mult = registry.multiplierAt(windowId, 0, winning);
+        assertEq(
+            game.balances(PLAYER),
+            (uint256(0.03 ether) * mult) / game.MULT_SCALE(),
+            "whole flow works without deposit() ever being called"
+        );
+    }
+
     // --------------------------------------------------------- round flow
 
     function test_WinningBetPaysMultiplier() public {

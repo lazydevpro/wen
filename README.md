@@ -35,7 +35,7 @@ specifically**, because wen's core axis is depth into the past:
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
 | `ChartRegistry` | `0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61` |
-| `GridGame` | `0x0e60CdA4959849244095D1f0ED0F787e8Da39Ac3` |
+| `GridGame` | `0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
@@ -67,7 +67,7 @@ Full detail: **[docs/ATTESTCOIN_INTEGRATION.md](docs/ATTESTCOIN_INTEGRATION.md)*
 ## The game
 
 ```
-connect wallet → deposit once → pick an ante → DEAL
+connect wallet → pick an ante → DEAL          (no deposit step — see below)
    └─ startRound() lands on-chain, assigning a RANDOM window
       └─ only now is the chart drawn — 45s on the clock
          └─ place bets → settleRound() → resolveRound() → reveal
@@ -100,6 +100,12 @@ The ante has to confirm **before** the chart appears. Otherwise a player deals, 
 the candle series against public price history, and walks away for free — the exact attack this
 design exists to price. The ante is not a fee: it counts toward your stake, so an honest player
 pays nothing extra. Deal and walk away and it is forfeit.
+
+What is **not** required is a deposit. `startRound` and `settleRound` are payable: whatever the
+table credit doesn't cover rides along as `msg.value` on a transaction the player signs anyway,
+so a fresh faucet wallet plays in one popup. Excess value stays as withdrawable credit, winnings
+accumulate there, and `deposit()` remains only as an optional top-up. A mandatory deposit-first
+step would be pure friction — the signature is the cost, not the transfer.
 
 `DECISION_BLOCKS = 20` (~5 min at 15s blocks) enforces the countdown on-chain. That budget covers
 the deal confirming, the 45s client clock, and the settle being mined — it is not just thinking
@@ -148,7 +154,7 @@ opposite, both times. Run it yourself: `pnpm --dir worker simulate`, and re-swee
 ## Repo
 
 ```
-contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (33 tests)
+contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (37 tests)
 worker/        TypeScript — indexer, prover, window builder, calibration harness
 web/           Client — canvas chart, multiplier grid, reveal
 faucet-worker/ Cloudflare Worker — hosts the client, the faucet, and gated reveals
@@ -162,7 +168,7 @@ cp .env.example .env       # add DEPLOYER_PRIVATE_KEY + an archive-capable ETH_M
 pnpm --dir worker install
 pnpm --dir contracts install && forge build --root contracts
 
-forge test --root contracts               # 33 tests against real proven mainnet data
+forge test --root contracts               # 37 tests against real proven mainnet data
 pnpm --dir worker spike                   # prove a real swap (needs no CTC — view call)
 pnpm --dir worker bulk-windows            # rebuild the 120-window pool (~15 min of RPC)
 pnpm --dir worker relabel-windows         # honest labels/riddles per slice

@@ -67,10 +67,13 @@
 
     <div class="panel deposit-panel" id="depositPanel">
       <div class="panel-head"><span class="tag">table credit</span></div>
-      <p class="muted">Deposit once, then play as many hands as you like without signing a transfer each time.</p>
+      <p class="muted">
+        Winnings land here, and bets draw from it first — anything it doesn't cover rides along
+        with the bet itself. Topping up is optional.
+      </p>
       <div class="guess-row">
         <input id="depositInput" type="number" min="0.1" step="0.1" value="20" />
-        <button id="btnDeposit" class="ghost">deposit</button>
+        <button id="btnDeposit" class="ghost">top up</button>
       </div>
       <button id="btnWithdraw" class="ghost wide-sm">withdraw all</button>
     </div>
@@ -79,7 +82,7 @@
       <div class="panel-head"><span class="tag">ante up</span></div>
       <p class="muted">
         Your ante is your <strong>minimum stake</strong>, not a fee — it counts toward your bets.
-        The chart is dealt only once the ante lands on-chain.
+        It's paid straight from your wallet as you deal; no deposit needed.
       </p>
       <div class="ante-grid" id="anteGrid"></div>
       <button id="btnDeal" class="primary wide" disabled>deal me a chart</button>

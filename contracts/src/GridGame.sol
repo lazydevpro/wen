@@ -21,8 +21,14 @@ import {ChartRegistry} from "./ChartRegistry.sol";
  * The ante is not a fee: it counts toward the player's stake, so an honest player pays nothing
  * extra. A player who deals and walks away forfeits it. That is the whole point.
  *
- * Players deposit once and rounds draw from an on-chain balance, so per-round transactions are
- * signatures rather than value transfers.
+ * ── Why the round entry points are payable ──────────────────────────────────────────────────
+ *
+ * Rounds draw from an on-chain balance so winnings can be credited rather than transferred.
+ * But a mandatory deposit-first step was pure friction: the player signs startRound anyway,
+ * and attaching value to a transaction they are already signing costs no extra interaction.
+ * So startRound and settleRound accept value and credit it before their own accounting —
+ * a brand-new wallet goes faucet → deal in one popup, and the balance remains what winnings
+ * accumulate into. deposit() stays for topping up without playing.
  *
  * Testnet only — CTC here has no value, so this is game mechanics rather than a gambling
  * operation. The bankroll controls are real because getting them right is the interesting work.
@@ -171,8 +177,17 @@ contract GridGame {
     // ------------------------------------------------------- player credit
 
     function deposit() external payable {
-        balances[msg.sender] += msg.value;
-        emit Deposited(msg.sender, msg.value, balances[msg.sender]);
+        _creditValue();
+    }
+
+    /// @dev Credit attached value to the sender's balance before any round accounting runs.
+    ///      Excess simply stays as withdrawable credit; a shortfall still reverts with
+    ///      InsufficientBalance, so the caller never needs to attach an exact amount.
+    function _creditValue() private {
+        if (msg.value > 0) {
+            balances[msg.sender] += msg.value;
+            emit Deposited(msg.sender, msg.value, balances[msg.sender]);
+        }
     }
 
     function withdraw(uint256 amount) external {
@@ -193,7 +208,8 @@ contract GridGame {
      *      player receives, but every window carries the same house edge, so there is nothing to
      *      gain. This is deliberately NOT used for anything that decides a payout.
      */
-    function startRound(uint128 ante) external returns (uint256 roundId, bytes32 windowId) {
+    function startRound(uint128 ante) external payable returns (uint256 roundId, bytes32 windowId) {
+        _creditValue();
         if (paused) revert GamePaused();
         if (ante == 0) revert AnteTooSmall();
 
@@ -242,7 +258,9 @@ contract GridGame {
      */
     function settleRound(uint256 roundId, uint8[] calldata ts, uint8[] calldata ps, uint128[] calldata amounts)
         external
+        payable
     {
+        _creditValue();
         Round storage r = rounds[roundId];
         if (r.state != RoundState.Dealt) revert WrongRoundState(roundId);
         if (msg.sender != r.player) revert NotPlayer();

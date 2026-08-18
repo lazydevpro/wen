@@ -3,8 +3,12 @@
  *
  * Round flow, and why it's shaped this way:
  *
- *   connect → deposit once → pick an ante → startRound() lands on-chain → ONLY THEN is the
- *   window known and the chart drawn → 45s to bet → settleRound() → resolveRound()
+ *   connect → pick an ante → startRound() lands on-chain → ONLY THEN is the window known and
+ *   the chart drawn → 45s to bet → settleRound() → resolveRound()
+ *
+ * There is no deposit step. startRound and settleRound are payable: whatever the table credit
+ * doesn't cover rides along as msg.value on a transaction the player signs anyway, so a fresh
+ * faucet wallet plays in one popup. Winnings still accumulate as credit and are withdrawable.
  *
  * The ante has to be a real transaction that confirms *before* the chart appears. Otherwise a
  * player deals, reverse-searches the candle series against public price history, and walks away
@@ -32,7 +36,7 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x0e60CdA4959849244095D1f0ED0F787e8Da39Ac3';
+const GRID_GAME = '0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d';
 const REGISTRY = '0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61';
 
 const GAME_ABI = [
@@ -42,8 +46,8 @@ const GAME_ABI = [
     'function maxBet() external view returns (uint256)',
     'function maxRoundExposure() external view returns (uint256)',
     'function DECISION_BLOCKS() external view returns (uint256)',
-    'function startRound(uint128 ante) external returns (uint256,bytes32)',
-    'function settleRound(uint256 roundId,uint8[] ts,uint8[] ps,uint128[] amounts) external',
+    'function startRound(uint128 ante) external payable returns (uint256,bytes32)',
+    'function settleRound(uint256 roundId,uint8[] ts,uint8[] ps,uint128[] amounts) external payable',
     'function resolveRound(uint256 roundId,uint256[] indices,uint64[] blockNumbers,uint160[] sqrtPrices,bytes32[][] proofs) external',
     'function roundSummary(uint256) external view returns (address,bytes32,uint8,uint128,uint128,uint128)',
     'function deadlineOf(uint256) external view returns (uint256)',
@@ -85,7 +89,7 @@ function explain(e) {
         case 'BetTooLarge':
             return `one bet is over the per-cell limit of ${state.maxBet.toFixed(1)} CTC`;
         case 'InsufficientBalance':
-            return 'not enough table credit — deposit more';
+            return 'not enough CTC — grab some from the faucet';
         case 'WrongRoundState':
             return 'this round was already settled or expired';
         case 'GamePaused':
@@ -139,6 +143,7 @@ const state = {
     game: null,
     address: null,
     credit: 0n,
+    wallet: 0n,
     win: null,
     roundId: null,
     ante: 1,
@@ -269,14 +274,26 @@ async function connect() {
     show('screenLobby');
 }
 
+/** Keep a little native CTC aside so attaching value can never leave the player unable to pay gas. */
+const GAS_RESERVE = parseEther('0.05');
+
 async function refreshCredit() {
     state.credit = await state.game.balances(state.address);
+    state.wallet = await state.provider.getBalance(state.address);
     // both limits shrink with the bankroll, so read them rather than assuming
     state.maxBet = Number(formatEther(await state.game.maxBet()));
     state.maxExposure = Number(formatEther(await state.game.maxRoundExposure()));
     $('credit').textContent = Number(formatEther(state.credit)).toFixed(2);
-    $('btnDeal').disabled = state.credit < parseEther(String(state.ante));
-    $('depositPanel').classList.toggle('needs-funds', state.credit === 0n);
+
+    // credit plus wallet is what the player can actually stake — the deposit step is gone
+    const spendable = state.credit + (state.wallet > GAS_RESERVE ? state.wallet - GAS_RESERVE : 0n);
+    $('btnDeal').disabled = spendable < parseEther(String(state.ante));
+    $('depositPanel').classList.toggle('needs-funds', spendable === 0n);
+}
+
+/** How much value must ride along so `needed` clears the current credit. */
+function shortfall(needed) {
+    return needed > state.credit ? needed - state.credit : 0n;
 }
 
 // ─────────────────────────────────────────────────────── lobby
@@ -440,7 +457,9 @@ async function deal() {
     syncBets();
 
     try {
-        const tx = await state.game.startRound(parseEther(String(state.ante)));
+        const anteWei = parseEther(String(state.ante));
+        // whatever credit doesn't cover rides along as value — no separate deposit
+        const tx = await state.game.startRound(anteWei, {value: shortfall(anteWei)});
         $('veilText').textContent = 'ante on-chain — dealing…';
         const rcpt = await tx.wait();
 
@@ -625,7 +644,11 @@ async function lockIn() {
     $('veilText').textContent = 'confirm your bets…';
 
     try {
-        const tx = await state.game.settleRound(state.roundId, ts, ps, amts);
+        // the contract deducts (totalStake - ante); attach whatever credit doesn't cover
+        const anteWei = parseEther(String(state.ante));
+        const stakeWei = amts.reduce((a, b) => a + b, 0n);
+        const extra = stakeWei > anteWei ? stakeWei - anteWei : 0n;
+        const tx = await state.game.settleRound(state.roundId, ts, ps, amts, {value: shortfall(extra)});
         $('veilText').textContent = 'bets locked in — revealing…';
         await tx.wait();
         await refreshCredit();

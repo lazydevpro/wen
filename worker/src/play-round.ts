@@ -3,8 +3,11 @@
  *
  *   pnpm play-round
  *
- * deposit → startRound (window assigned on-chain, unknown until the receipt) → settleRound
- * → resolveRound. Proves the deal/settle/resolve flow works on CC3 Testnet.
+ * startRound (window assigned on-chain, unknown until the receipt) → settleRound → resolveRound.
+ *
+ * Deliberately NEVER calls deposit(): both round entry points are payable and any stake the
+ * table credit does not cover rides along as value, which is the whole point — a fresh faucet
+ * wallet plays with no separate funding step. This script is the proof of that flow.
  */
 import {readFileSync} from 'node:fs';
 import {formatEther, parseEther} from 'ethers';
@@ -31,19 +34,14 @@ async function main() {
     console.log(`bankroll : ${formatEther(await game.bankroll())} CTC`);
     console.log(`maxBet   : ${formatEther(await game.maxBet())} CTC\n`);
 
-    // ---- 1. table credit ----
+    // ---- 1. table credit (informational only — we never deposit) ----
     let credit: bigint = await game.balances(wallet.address);
-    console.log(`[1] credit: ${formatEther(credit)} CTC`);
-    if (credit < ANTE * 3n) {
-        console.log('    depositing 10 CTC...');
-        await (await game.deposit({value: parseEther('10')})).wait();
-        credit = await game.balances(wallet.address);
-        console.log(`    credit now ${formatEther(credit)} CTC`);
-    }
+    console.log(`[1] credit: ${formatEther(credit)} CTC — no deposit will be made`);
 
-    // ---- 2. deal ----
-    console.log(`\n[2] startRound(ante=${formatEther(ANTE)} CTC) — the window is unknown until this lands`);
-    const dealTx = await game.startRound(ANTE);
+    // ---- 2. deal, attaching whatever credit does not cover ----
+    const anteShort = ANTE > credit ? ANTE - credit : 0n;
+    console.log(`\n[2] startRound(ante=${formatEther(ANTE)} CTC) with ${formatEther(anteShort)} CTC attached`);
+    const dealTx = await game.startRound(ANTE, {value: anteShort});
     const dealRcpt = await dealTx.wait();
 
     const dealt = dealRcpt.logs
@@ -93,7 +91,12 @@ async function main() {
     if (staked < ANTE) throw new Error(`sized stake ${formatEther(staked)} fell below ante ${formatEther(ANTE)}`);
     console.log(`\n[3] settleRound — betting t0/band${winningBand} (hits) and t1/band${losingBand} (misses)`);
     console.log(`    staked: ${formatEther(staked)} CTC`);
-    const settleRcpt = await (await game.settleRound(roundId, ts, ps, amts)).wait();
+    // the ante is already held by the round; attach only what credit misses of the difference
+    credit = await game.balances(wallet.address);
+    const extra = staked > ANTE ? staked - ANTE : 0n;
+    const settleShort = extra > credit ? extra - credit : 0n;
+    console.log(`    attaching ${formatEther(settleShort)} CTC (credit covers the rest)`);
+    const settleRcpt = await (await game.settleRound(roundId, ts, ps, amts, {value: settleShort})).wait();
     console.log(`    settled in block ${settleRcpt.blockNumber}`);
 
     // ---- 4. resolve ----
