@@ -6,7 +6,7 @@
  * implementation that drifted even slightly would register windows the tests do not describe.
  */
 import {parseUnits, keccak256, toUtf8Bytes} from 'ethers';
-import {GRID_PRICE_BANDS, GRID_TIME_STEPS, bandOf, buildMerkle, candleLeaf, merkleProof} from './window.js';
+import {GRID_LEAD_STEPS, GRID_PRICE_BANDS, GRID_TIME_STEPS, bandOf, buildMerkle, candleLeaf, merkleProof} from './window.js';
 
 export interface RegistrationParams {
     windowId: string;
@@ -44,7 +44,8 @@ export function registrationParams(win: any): RegistrationParams {
         throw new Error(`merkle mismatch for ${win.id}: rebuilt ${root} vs stored ${win.merkleRoot}`);
     }
 
-    const hidden = candles.slice(visibleCount, visibleCount + GRID_TIME_STEPS);
+    const firstOutcome = visibleCount + GRID_LEAD_STEPS;
+    const hidden = candles.slice(firstOutcome, firstOutcome + GRID_TIME_STEPS);
 
     return {
         windowId: keccak256(toUtf8Bytes(win.id)),

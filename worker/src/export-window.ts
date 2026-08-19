@@ -9,7 +9,7 @@
  */
 import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
 import {parseUnits, keccak256, toUtf8Bytes} from 'ethers';
-import {GRID_PRICE_BANDS, GRID_TIME_STEPS, bandOf, buildMerkle, candleLeaf, merkleProof} from './lib/window.js';
+import {GRID_LEAD_STEPS, GRID_PRICE_BANDS, GRID_TIME_STEPS, bandOf, buildMerkle, candleLeaf, merkleProof} from './lib/window.js';
 
 const id = process.argv[2];
 if (!id) {
@@ -30,8 +30,10 @@ const leaves = candles.map(candleLeaf);
 const {root, layers} = buildMerkle(leaves);
 if (root !== win.merkleRoot) throw new Error(`merkle mismatch: rebuilt ${root} vs stored ${win.merkleRoot}`);
 
-// hidden candles that the grid actually covers
-const hidden = candles.slice(visibleCount, visibleCount + GRID_TIME_STEPS);
+// hidden candles the grid actually covers — the runway is travelled, not bet on. GridGame pins
+// each revealed index to visibleCount + GRID_LEAD_STEPS + t, so this offset is load-bearing.
+const firstOutcome = visibleCount + GRID_LEAD_STEPS;
+const hidden = candles.slice(firstOutcome, firstOutcome + GRID_TIME_STEPS);
 
 const expectedBands = hidden.map((c: any) =>
     bandOf(c.close, win.anchorPrice, win.bandHeight, GRID_PRICE_BANDS),

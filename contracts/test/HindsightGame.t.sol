@@ -99,6 +99,12 @@ contract HindsightGameTest is Test {
         }
     }
 
+    /// The fixture's hidden[] already starts at the first bettable candle, so its indices are
+    /// the pinned ones; this just documents the contract's expectation in one place.
+    function _firstOutcomeIdx() internal view returns (uint256 first) {
+        (first,,,) = _hidden(0);
+    }
+
     // =================================================== THE CRITICAL TEST
 
     /// If Solidity and TypeScript disagree on which band a price lands in, the game pays the
@@ -407,6 +413,46 @@ contract HindsightGameTest is Test {
         game.settleRound(roundId, ts, ps, amts);
     }
 
+    /// A Merkle proof says a candle belongs to the window, NOT which candle it is. Resolution is
+    /// permissionless with caller-supplied indices, so before index pinning a player could submit
+    /// one winning candle in all eight slots and collect on every column — measured at 19x the
+    /// honest payout. This is the regression guard for that.
+    uint8 private xBand;
+    uint256 private xRound;
+
+    function test_RejectsRepeatedCandleAcrossColumns() public {
+        vm.deal(PLAYER, 50 ether);
+        vm.prank(PLAYER);
+        (xRound,) = game.startRound{value: 1 ether}(0.01 ether);
+
+        xBand = uint8(uint256(expectedBands[0]));
+        require(uint256(expectedBands[2]) != xBand, "fixture needs differing bands");
+        _betSameBandTwice();
+        vm.expectRevert();          // WrongCandleIndex: each slot is pinned to its own candle
+        _resolveWithRepeatedCandle();
+
+    }
+
+    function _betSameBandTwice() internal {
+        uint8[] memory ts = new uint8[](2);
+        uint8[] memory ps = new uint8[](2);
+        uint128[] memory amts = new uint128[](2);
+        ts[0] = 0; ps[0] = xBand; amts[0] = 0.01 ether;
+        ts[1] = 2; ps[1] = xBand; amts[1] = 0.01 ether;   // wrong for t=2 — should lose
+        vm.prank(PLAYER);
+        game.settleRound(xRound, ts, ps, amts);
+    }
+
+    function _resolveWithRepeatedCandle() internal {
+        (uint256 i0, uint64 b0, uint160 s0, bytes32[] memory pr0) = _hidden(0);
+        uint256[] memory idx = new uint256[](timeSteps);
+        uint64[] memory bns = new uint64[](timeSteps);
+        uint160[] memory sps = new uint160[](timeSteps);
+        bytes32[][] memory prs = new bytes32[][](timeSteps);
+        for (uint256 t = 0; t < timeSteps; t++) { idx[t] = i0; bns[t] = b0; sps[t] = s0; prs[t] = pr0; }
+        game.resolveRound(xRound, idx, bns, sps, prs);
+    }
+
     // ------------------------------------------- the decision window
 
     /// The countdown must be enforced on-chain, or it is decoration and a reverse-searcher
@@ -417,7 +463,7 @@ contract HindsightGameTest is Test {
 
         vm.roll(block.number + game.DECISION_BLOCKS() + 1);
 
-        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.01 ether);
         vm.prank(PLAYER);
         vm.expectRevert();
         game.settleRound(roundId, ts, ps, amts);
@@ -429,7 +475,7 @@ contract HindsightGameTest is Test {
 
         vm.roll(block.number + game.DECISION_BLOCKS()); // exactly on the deadline
 
-        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.01 ether);
         vm.prank(PLAYER);
         game.settleRound(roundId, ts, ps, amts);
 
@@ -467,7 +513,7 @@ contract HindsightGameTest is Test {
         uint128 ante = 0.05 ether;
         uint256 roundId = _dealRound(PLAYER, ante);
 
-        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.01 ether);
         vm.prank(PLAYER);
         vm.expectRevert(abi.encodeWithSelector(GridGame.StakeBelowAnte.selector, uint256(0.01 ether), ante));
         game.settleRound(roundId, ts, ps, amts);
@@ -515,7 +561,7 @@ contract HindsightGameTest is Test {
         _deposit(PLAYER, 5 ether);
         uint256 roundId = _dealRound(PLAYER, 0.01 ether);
 
-        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 5, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.01 ether);
         vm.prank(ATTACKER);
         vm.expectRevert(GridGame.NotPlayer.selector);
         game.settleRound(roundId, ts, ps, amts);

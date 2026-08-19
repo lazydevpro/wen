@@ -9,18 +9,47 @@ export const VISIBLE_FRAC = 0.2;
 
 /** Grid dimensions. */
 export const GRID_TIME_STEPS = 8;
-export const GRID_PRICE_BANDS = 12;
+
+/**
+ * Price bands per column. Was 12.
+ *
+ * Multiplier = (1 - edge) / probability, so a LOW multiplier needs a band wide enough to be
+ * likely. At 12 bands the likeliest cell paid ~4.3x with the runway, which meant one lucky cell
+ * covered four wrong ones and hitting anything felt like winning. Five wider bands bring that to
+ * ~1.5x: a single hit is now unremarkable, and covering several cells is the only route to a
+ * real return — which costs proportionally more. Measured with `pnpm sweep-grid`.
+ */
+export const GRID_PRICE_BANDS = 5;
+
+/**
+ * Hidden candles of runway before the first bettable column.
+ *
+ * The path is already travelling when it reaches the grid instead of starting pinned to the
+ * anchor. That also spreads the first column, which used to be concentrated enough that a couple
+ * of cells carried nearly all the probability.
+ *
+ * Load-bearing on-chain: GridGame pins each revealed candle to visibleCount + LEAD + t, so this
+ * must match GridGame.GRID_LEAD_STEPS exactly or nothing resolves.
+ */
+export const GRID_LEAD_STEPS = Number(process.env.GRID_LEAD_STEPS ?? 2);
 
 /**
  * House edge baked into every multiplier.
  *
- * Was 0.037 (casino-slot territory). Retuned after real play: with per-cell EV at 96.3%, covering
- * the top five cells of an early column returned something 94% of rounds — the house won on paper
- * and lost the feel. At 0.11 the designed RTP is 89%, which measures ~90% realised against the
- * pool (real paths run slightly hotter than the model, same ~1.3pt gap seen at every calibration).
- * Sessions now bleed visibly; the game stays winnable on a read, not on coverage.
+ * Retuned three times, each against measured outcomes rather than intuition:
+ *
+ *   0.037  ->  covering five likely cells returned something 94% of rounds. Fair on paper,
+ *              felt like the house never won.
+ *   0.110  ->  90.3% realised at 12 bands. Better, but the likeliest cell still paid ~3x, so a
+ *              single hit covered four misses.
+ *   0.162  ->  the 5-band grid concentrates probability into wider cells, and reality ran 5.5
+ *              points hotter than the model there (vs ~1.3 at 12 bands). This is the design
+ *              target that lands ~89% realised, and it drags the cheapest cell under 1.5x.
+ *
+ * The gap between designed and realised is why the design number always overshoots — re-measure
+ * with `pnpm simulate` after any change to grid shape, never assume it carries over.
  */
-export const HOUSE_EDGE = 0.11;
+export const HOUSE_EDGE = 0.162;
 
 /** Hard cap — the top multiplier dominates bankroll variance. */
 export const MAX_MULTIPLIER = 250;
@@ -42,7 +71,7 @@ export const MIN_MULTIPLIER = 0.3;
  * stopped there, which is the trap: a number that fits the sample you happen to have is not a
  * calibration. Re-check with `pnpm sweep-span` whenever the pool changes materially.
  */
-export const GRID_SIGMA_SPAN = Number(process.env.GRID_SIGMA_SPAN ?? 3.4);
+export const GRID_SIGMA_SPAN = Number(process.env.GRID_SIGMA_SPAN ?? 4.5);
 
 export interface Candle {
     index: number;
@@ -189,20 +218,24 @@ export function buildGrid(
     bands = GRID_PRICE_BANDS,
     sims = 40_000,
 ): {grid: GridCell[]; bandHeight: number} {
-    // grid spans roughly +/-3 sigma over the full horizon
-    const horizonSigma = sigma * Math.sqrt(timeSteps);
+    // The horizon includes the runway: the last bettable column sits LEAD steps further out
+    // than it used to, so the grid has to be sized for where the path can actually be by then.
+    const total = GRID_LEAD_STEPS + timeSteps;
+    const horizonSigma = sigma * Math.sqrt(total);
     const bandHeight = (GRID_SIGMA_SPAN * horizonSigma) / bands;
 
     const hits: number[][] = Array.from({length: timeSteps}, () => new Array(bands).fill(0));
 
     for (let s = 0; s < sims; s++) {
         let logP = 0;
-        for (let t = 0; t < timeSteps; t++) {
+        for (let step = 0; step < total; step++) {
             // Box-Muller
             const u1 = Math.random() || 1e-12;
             const u2 = Math.random();
             const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
             logP += sigma * z;
+            const t = step - GRID_LEAD_STEPS;   // runway steps are travelled, not bet on
+            if (t < 0) continue;
             const b = bandOf(anchorPrice * Math.exp(logP), anchorPrice, bandHeight, bands);
             if (b >= 0) hits[t][b]++;
         }
@@ -228,7 +261,7 @@ export function buildGrid(
 
 export function buildWindow(id: string, era: EraSpec, pool: PoolSpec, buckets: Bucket[]): Window {
     const candles = foldBuckets(buckets);
-    if (candles.length < GRID_TIME_STEPS + 5) {
+    if (candles.length < GRID_LEAD_STEPS + GRID_TIME_STEPS + 5) {
         throw new Error(`too few candles (${candles.length}) - era too thin or span too narrow`);
     }
     const visibleCount = Math.max(3, Math.floor(candles.length * VISIBLE_FRAC));
@@ -242,7 +275,8 @@ export function buildWindow(id: string, era: EraSpec, pool: PoolSpec, buckets: B
     const {root} = buildMerkle(candles.map(candleLeaf));
 
     // The answer. Kept server-side; revealed candle-by-candle with Merkle proofs.
-    const outcome = hidden.slice(0, GRID_TIME_STEPS).map((c, t) => ({
+    // Starts past the runway — those candles happen, they just aren't bet on.
+    const outcome = hidden.slice(GRID_LEAD_STEPS, GRID_LEAD_STEPS + GRID_TIME_STEPS).map((c, t) => ({
         t,
         p: bandOf(c.close, anchorPrice, bandHeight, GRID_PRICE_BANDS),
     }));

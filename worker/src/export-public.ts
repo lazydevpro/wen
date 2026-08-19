@@ -19,7 +19,7 @@
  */
 import {readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync} from 'node:fs';
 import {keccak256, toUtf8Bytes} from 'ethers';
-import {GRID_TIME_STEPS, buildMerkle, candleLeaf, merkleProof} from './lib/window.js';
+import {GRID_LEAD_STEPS, GRID_TIME_STEPS, buildMerkle, candleLeaf, merkleProof} from './lib/window.js';
 
 const SRC = new URL('../data/windows/', import.meta.url).pathname;
 const PUBLIC_DIR = new URL('../../web/data/w/', import.meta.url).pathname;
@@ -38,7 +38,11 @@ for (const f of files) {
     const w = JSON.parse(readFileSync(SRC + f, 'utf8'));
     const windowId = keccak256(toUtf8Bytes(w.id));
     const visible = w.candles.slice(0, w.visibleCount);
-    const hidden = w.candles.slice(w.visibleCount, w.visibleCount + GRID_TIME_STEPS);
+    // runway candles are revealed with the outcome — they are part of the path the player
+    // watches, they simply sit before the first bettable column
+    const runway = w.candles.slice(w.visibleCount, w.visibleCount + GRID_LEAD_STEPS);
+    const firstOutcome = w.visibleCount + GRID_LEAD_STEPS;
+    const hidden = w.candles.slice(firstOutcome, firstOutcome + GRID_TIME_STEPS);
 
     writeFileSync(
         `${PUBLIC_DIR}${windowId}.json`,
@@ -51,6 +55,7 @@ for (const f of files) {
             bandHeight: w.bandHeight,
             sigma: w.sigma,
             timeSteps: GRID_TIME_STEPS,
+            leadSteps: GRID_LEAD_STEPS,
             priceBands: w.grid.reduce((m: number, c: any) => Math.max(m, c.p + 1), 0),
             visible: visible.map((c: any) => ({b: c.blockNumber, o: c.open, h: c.high, l: c.low, c: c.close})),
             grid: w.grid.map((c: any) => ({t: c.t, p: c.p, m: c.multiplier})),
@@ -68,6 +73,9 @@ for (const f of files) {
             windowId,
             eraLabel: w.era.label,
             answers: w.era.answers,
+            leadSteps: GRID_LEAD_STEPS,
+            // drawn before the grid, never bet on, so no proof is needed
+            runway: runway.map((c: any) => ({o: c.open, h: c.high, l: c.low, c: c.close})),
             hidden: hidden.map((c: any, t: number) => ({
                 t,
                 index: c.index,

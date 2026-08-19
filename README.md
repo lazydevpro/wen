@@ -34,8 +34,8 @@ specifically**, because wen's core axis is depth into the past:
 | Contract | Address |
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0x5156A5BD8F3304eCE58c12F097B98C11600ba2A5` |
-| `GridGame` | `0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC` |
+| `ChartRegistry` | `0x12FEA1E6A6664e7631BA6f2a3ac625Da9dC193F8` |
+| `GridGame` | `0x783432Bf4Eb7A15eE95D003b7a13404F6C70456c` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
@@ -81,7 +81,10 @@ connect wallet → pick an ante → DEAL          (no deposit step — see below
   single window it was dealt, keyed by a windowId that only exists once the ante is mined. It
   cannot enumerate the pool, or even learn how large it is.
 - **Visible 20%** of a ~10-day window is drawn; the rest is hidden.
-- **A grid of (time × price) cells** sits over the future, each printed with its multiplier.
+- **The chart travels two steps before the grid begins.** Those candles happen and are drawn —
+  they simply aren't bettable. Starting the grid pinned to the anchor made the first column so
+  concentrated that a couple of cells carried nearly all the probability.
+- **A grid of 8 × 5 (time × price) cells** sits over the future, each printed with its multiplier.
 - **Multipliers are computed from the visible candles only** — the odds cannot leak the hidden path.
 - The chart plays forward; cells the real price path crosses pay out.
 
@@ -137,49 +140,50 @@ The per-round exposure cap (bankroll ÷ 20) applies to the **worst case where ev
 A 250× cell can therefore only carry `cap / 250` CTC — which can be *less than the ante*, forcing
 bets to be spread rather than concentrated. The UI surfaces this before you can hit the revert.
 
-## House edge — calibrated twice, because once was not enough
+## House edge — calibrated three times, and it still moved
 
-Target RTP is 96.3% (3.7% edge). The arithmetic was exact from the start. It was wrong twice.
+Every calibration here was measured against real outcomes, and every one of them was wrong in a
+way the previous one could not have predicted.
 
-**First miss.** The grid was priced from a normal random walk fitted to the visible candles,
-spanning ±3σ. Real price paths travel nowhere near that far, so the outer bands were unreachable
-and players were buying cells that **could not win**. Realised edge: **56%**. Narrowing to 2.55σ
-brought it to ~95% against the six windows that existed then.
+**±3σ, 12 bands.** Real paths travel nowhere near that far, so the outer bands were unreachable
+and players bought cells that **could not win**. Realised edge: **56%**.
 
-**Second miss, found by building this pool.** 2.55σ was fitted to *six price paths*. Measured
-against 120 windows and 960 real outcomes it returns **87%** — a 13% house edge, more than three
-times the target. Six paths cannot pin a distribution. The first calibration corrected an obvious
-56% error and stopped there, which felt like enough and was not.
+**2.55σ.** Fixed against the six windows that existed then. Building the 120-window pool showed it
+never generalised: 87% RTP, a **13% edge** where 3.7% was intended. Six price paths cannot pin a
+distribution.
 
-| Grid width | RTP over 960 real outcomes |
-|---|---|
-| 2.55 σ | 86.9% (13.1% edge — gouging) |
-| 3.0 σ | 88.6% |
-| **3.4 σ** | **97.6%** ✅ |
-| 3.7 σ | 98.2% |
-| 4.5 σ | 106.9% (house loses) |
+**3.4σ, 11% design edge.** Landed 90.3% realised. Correct on paper, wrong in play — per-cell EV
+was fair, but the likeliest cell paid ~3–4×, so one lucky cell covered four wrong ones and hitting
+anything felt like winning.
 
-**Third pass — deliberate, not a bug fix.** At a 2.41% realised edge, real play felt wrong in the
-other direction: per-cell EV was fair, but covering the five likeliest cells of an early column
-returned *something* 94% of rounds, so sessions barely bled and most hands felt like wins. The
-designed edge moved from 3.7% to **11%**, measuring **90.3% realised RTP (9.7% edge)** over the
-same 960 outcomes. The same 1.3-point model-vs-reality gap appeared at every calibration, which is
-why the design target overshoots. Coverage still pays back ~89% of stake per round in expectation —
-the game is winnable on a read, not on coverage.
+**Now: 5 bands, 4.5σ, two steps of runway, 16.2% design edge → 88.6% realised (11.4% edge).**
+Multiplier = (1 − edge) / probability, so a *low* multiplier needs a *likely* cell. Five wider
+bands bring the cheapest cell from 4.31× to **1.41×**: hitting it returns less than the cost of
+covering the cells around it, so a real return means reading the chart rather than blanketing it.
+A round played live after the change hit its winning cell and still finished **−0.08 CTC**.
 
-**The harness was lying too.** `simulate.ts` skipped columns where the price left the grid —
-removing them from the denominator as well as the numerator, and so discarding precisely the
-columns where the house wins every unit. It overstated RTP by about 20 points, and briefly had me
-reporting that the house was losing money when it was in fact overcharging by 4×.
+| shape | cheapest cell | realised RTP | dead cells |
+|---|---|---|---|
+| 12 bands, 3.4σ | 4.31× | 76.8% | 0.9% |
+| 12 bands, 4.5σ | 3.35× | 89.7% | 7.1% |
+| 6 bands, 4.5σ | 2.04× | 98.7% | 2.7% |
+| **5 bands, 4.5σ** | **1.50×** | **93.9%** | **0.2%** |
+| 5 bands, 9.0σ | 0.99× | 279% ❌ | 35.7% |
 
-I had assumed the failure mode would be fat tails *underpricing* the tails. It was the exact
-opposite, both times. Run it yourself: `pnpm --dir worker simulate`, and re-sweep with
-`pnpm --dir worker sweep-span` whenever the pool changes.
+That last row is the wall. Pushing the cheapest cell to 1.0× needs bands so wide that a third of
+the grid is unwinnable, and the rare real path landing on a "dead" cell pays 250× — the house
+loses catastrophically. **A multiplier below 0.84× cannot exist at all**: it is (1 − edge), the
+price of a cell that is certain.
+
+The design number always overshoots the target because reality runs hotter than the model, and by
+a margin that depends on grid shape — 1.3 points at 12 bands, 5.5 at 5. Re-measure with
+`pnpm --dir worker simulate` and `pnpm --dir worker sweep-grid` after any shape change; never
+assume the previous calibration carries.
 
 ## Repo
 
 ```
-contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (43 tests)
+contracts/     Foundry — ChartVerifier, ChartRegistry, GridGame  (44 tests)
 worker/        TypeScript — indexer, prover, window builder, calibration harness
 web/           Client — canvas chart, multiplier grid, reveal
 faucet-worker/ Cloudflare Worker — hosts the client, the faucet, and gated reveals
@@ -193,7 +197,7 @@ cp .env.example .env       # add DEPLOYER_PRIVATE_KEY + an archive-capable ETH_M
 pnpm --dir worker install
 pnpm --dir contracts install && forge build --root contracts
 
-forge test --root contracts               # 43 tests against real proven mainnet data
+forge test --root contracts               # 44 tests against real proven mainnet data
 pnpm --dir worker spike                   # prove a real swap (needs no CTC — view call)
 pnpm --dir worker bulk-windows            # rebuild the 120-window pool (~15 min of RPC)
 pnpm --dir worker relabel-windows         # honest labels/riddles per slice

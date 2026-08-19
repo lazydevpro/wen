@@ -12,13 +12,13 @@
  * re-registered rather than left alone.
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
-import {GRID_PRICE_BANDS, GRID_SIGMA_SPAN, GRID_TIME_STEPS, bandOf, buildGrid} from './lib/window.js';
+import {GRID_LEAD_STEPS, GRID_PRICE_BANDS, GRID_SIGMA_SPAN, GRID_TIME_STEPS, bandOf, buildGrid} from './lib/window.js';
 
 const DIR = new URL('../data/windows/', import.meta.url).pathname;
 const files = readdirSync(DIR).filter((f) => f.endsWith('.json'));
 
 console.log('='.repeat(70));
-console.log(`REBUILD GRIDS — ${files.length} windows at GRID_SIGMA_SPAN ${GRID_SIGMA_SPAN}`);
+console.log(`REBUILD GRIDS — ${files.length} windows, ${GRID_PRICE_BANDS} bands, span ${GRID_SIGMA_SPAN}, lead ${GRID_LEAD_STEPS}`);
 console.log('='.repeat(70) + '\n');
 
 let changed = 0;
@@ -27,7 +27,8 @@ for (const f of files) {
     const before = w.bandHeight;
 
     const {grid, bandHeight} = buildGrid(w.anchorPrice, w.sigma);
-    const hidden = w.candles.slice(w.visibleCount, w.visibleCount + GRID_TIME_STEPS);
+    const first = w.visibleCount + GRID_LEAD_STEPS;   // past the runway
+    const hidden = w.candles.slice(first, first + GRID_TIME_STEPS);
 
     w.grid = grid;
     w.bandHeight = bandHeight;

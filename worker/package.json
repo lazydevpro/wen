@@ -24,7 +24,8 @@
     "gen-reveal-index": "tsx src/gen-reveal-index.ts",
     "sweep-span": "tsx src/sweep-span.ts",
     "rebuild-grids": "tsx src/rebuild-grids.ts",
-    "play-direction": "tsx src/play-direction.ts"
+    "play-direction": "tsx src/play-direction.ts",
+    "sweep-grid": "tsx src/sweep-grid.ts"
   },
   "dependencies": {
     "@gluwa/usc-contracts": "^0.1.2",

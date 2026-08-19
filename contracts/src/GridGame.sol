@@ -65,6 +65,16 @@ contract GridGame {
     /// @dev unresolved rounds become reclaimable after this long
     uint256 public constant ROUND_TIMEOUT = 1 days;
 
+    /**
+     * @dev Hidden candles between the anchor and the first bettable column.
+     *
+     * The chart travels before the grid begins: two steps of runway, so the path is already
+     * moving when it reaches the cells rather than starting pinned to the anchor. That also
+     * spreads the distribution over the first column, which used to be so concentrated that a
+     * single cell carried most of the probability.
+     */
+    uint256 public constant GRID_LEAD_STEPS = 2;
+
     uint256 public constant MULT_SCALE = 1e4;
     uint256 public constant MAX_DRAWDOWN_PCT = 30;
 
@@ -163,6 +173,7 @@ contract GridGame {
     error RevealCountMismatch(uint256 expected, uint256 got);
     error BadCandleProof(uint256 index);
     error InsufficientBankroll(uint256 needed, uint256 have);
+    error WrongCandleIndex(uint256 expected, uint256 got);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -439,8 +450,14 @@ contract GridGame {
                 || proofs.length != timeSteps
         ) revert RevealCountMismatch(timeSteps, indices.length);
 
+        // A Merkle proof only says "this candle belongs to this window" — it says nothing about
+        // WHICH candle, and resolution is permissionless with caller-supplied indices. Without
+        // pinning the position, a player could submit one winning candle in all eight slots and
+        // collect on every column; measured at 19x the honest payout before this check existed.
+        uint256 firstIdx = _firstOutcomeIndex(r.windowId);
         int256[] memory bands = new int256[](timeSteps);
         for (uint256 t = 0; t < timeSteps; t++) {
+            if (indices[t] != firstIdx + t) revert WrongCandleIndex(firstIdx + t, indices[t]);
             if (!registry.verifyCandle(r.windowId, indices[t], blockNumbers[t], sqrtPrices[t], proofs[t])) {
                 revert BadCandleProof(indices[t]);
             }
@@ -462,6 +479,12 @@ contract GridGame {
 
         _checkDrawdown();
         emit RoundResolved(roundId, r.player, payout);
+    }
+
+    /// @dev Index of the first bettable candle: past the visible run, past the runway.
+    function _firstOutcomeIndex(bytes32 windowId) private view returns (uint256) {
+        (,,,,, uint16 visibleCount,,,,,) = registry.windows(windowId);
+        return uint256(visibleCount) + GRID_LEAD_STEPS;
     }
 
     /// @dev Both payout shapes live outside resolveRound; inlining either blows the stack.

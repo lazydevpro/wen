@@ -50,7 +50,7 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC';
+const GRID_GAME = '0x783432Bf4Eb7A15eE95D003b7a13404F6C70456c';
 
 /**
  * Superseded deployments. Winnings live as in-contract credit, so every migration leaves any
@@ -63,9 +63,10 @@ const LEGACY_GAMES = [
     '0x0e60CdA4959849244095D1f0ED0F787e8Da39Ac3',
     '0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d',
     '0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A',
+    '0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC',
 ];
 const LEGACY_ABI = ['function balances(address) view returns (uint256)', 'function withdraw(uint256)'];
-const REGISTRY = '0x5156A5BD8F3304eCE58c12F097B98C11600ba2A5';
+const REGISTRY = '0x12FEA1E6A6664e7631BA6f2a3ac625Da9dC193F8';
 
 const GAME_ABI = [
     'function deposit() external payable',
@@ -814,6 +815,7 @@ function populateTable() {
     renderStake();
 
     buildGrid();
+    layoutGrid();
     $('modeGrid').classList.add('on');
     $('modeSimple').classList.remove('on');
     $('paneGrid').hidden = false;
@@ -824,7 +826,7 @@ function populateTable() {
     // canvas must be measured after it is visible
     drawChart();
     setTimeout(drawChart, 60);
-    window.addEventListener('resize', drawChart, {passive: true});
+    window.addEventListener('resize', () => { layoutGrid(); drawChart(); }, {passive: true});
 }
 
 /** Decision time begins here, never during the ceremony. */
@@ -853,6 +855,16 @@ function startClock() {
 }
 
 // ─────────────────────────────────────────────────────── betting
+
+/** Keep the cell overlay aligned to the same x-axis the canvas uses. */
+function layoutGrid() {
+    const w = state.win;
+    if (!w) return;
+    const lead = w.leadSteps ?? 0;
+    const totalSteps = w.visible.length + lead + w.timeSteps - 1;
+    const startFrac = (w.visible.length - 1 + lead) / totalSteps;
+    $('gridOverlay').style.width = `${(1 - startFrac) * 100}%`;
+}
 
 function buildGrid() {
     const w = state.win;
@@ -1082,6 +1094,13 @@ async function animateReveal() {
     const shown = [];
     let running = 0;
 
+    // walk the runway first — it is drawn, it just decides nothing
+    for (const c of state.reveal.runway ?? []) {
+        await new Promise((r) => setTimeout(r, 300));
+        shown.push(c);
+        drawPartial(shown);
+    }
+
     for (let t = 0; t < state.win.timeSteps; t++) {
         await new Promise((r) => setTimeout(r, 420));
         shown.push(state.reveal.hidden[t]);
@@ -1204,13 +1223,20 @@ function drawChart() {
     ctx.clearRect(0, 0, W, H);
 
     const visible = w.visible.map((c) => c.c);
-    const revealed = state.reveal ? state.reveal.hidden.map((c) => c.c) : [];
+    // runway candles are part of the drawn path but were never bettable
+    const revealed = state.reveal
+        ? [...(state.reveal.runway ?? []).map((c) => c.c), ...state.reveal.hidden.map((c) => c.c)]
+        : [];
 
     const half = (w.priceBands / 2) * w.bandHeight;
     const lo = w.anchorPrice * (1 - half);
     const hi = w.anchorPrice * (1 + half);
-    const totalSteps = w.visible.length + w.timeSteps - 1;
-    const gridLeft = W * 0.42;
+    // The path travels `leadSteps` before the grid begins, so the x-axis carries three
+    // sections: the visible run, the runway, then the bettable columns. The grid overlay is
+    // positioned from these same numbers (see layoutGrid) so pixels and cells cannot drift.
+    const lead = w.leadSteps ?? 0;
+    const totalSteps = w.visible.length + lead + w.timeSteps - 1;
+    const gridLeft = ((w.visible.length - 1 + lead) / totalSteps) * W;
 
     const X = (i) => (i / totalSteps) * W;
     const Y = (p) => H - ((p - lo) / (hi - lo)) * H;
@@ -1252,7 +1278,9 @@ function drawChart() {
 
 function drawPartial(shown) {
     const full = state.reveal;
-    state.reveal = {...full, hidden: shown};
+    // `shown` already accumulates runway THEN outcome, so blank the runway here or drawChart
+    // would prepend it a second time and the line would double back on itself
+    state.reveal = {...full, runway: [], hidden: shown};
     drawChart();
     state.reveal = full;
 }

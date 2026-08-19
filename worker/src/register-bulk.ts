@@ -110,8 +110,14 @@ async function main() {
         } catch (e: any) {
             failed++;
             console.log(`  ❌ ${win.id.padEnd(24)} ${(e.shortMessage ?? e.message ?? e).toString().slice(0, 70)}`);
-            // resync — a revert leaves the nonce unconsumed
-            nonce = await provider.getTransactionCount(wallet.address, 'pending');
+            // Resync — a revert leaves the nonce unconsumed. This lives INSIDE the catch, so a
+            // timeout here escapes to the top level and kills the whole run; it needs the same
+            // retry as everything else that touches the RPC.
+            try {
+                nonce = await withRetry(() => provider.getTransactionCount(wallet.address, 'pending'));
+            } catch {
+                console.log('  … nonce resync failed, will re-read next iteration');
+            }
         }
     }
 
