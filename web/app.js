@@ -21,6 +21,20 @@ import {BrowserProvider, Contract, formatEther, parseEther} from 'https://esm.sh
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * Canvas can't read CSS variables, so pull them off :root. Keeps styles.css the single source
+ * of truth for colour — the chart drifting out of sync with the interface is how the old
+ * palette ended up with a pink line nothing else used.
+ */
+const paletteCache = new Map();
+function palette(name) {
+    if (!paletteCache.has(name)) {
+        paletteCache.set(name, getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+    }
+    return paletteCache.get(name);
+}
+
+
 const CC3_CHAIN_ID = 102031;
 const CC3_CHAIN_ID_HEX = '0x18e8f';
 
@@ -215,8 +229,95 @@ const state = {
     setPhase(PHASE.IDLE);   // publish the starting phase rather than only transitions
     renderAnteGrid();
     wireControls();
+    startLanding();
     if (window.ethereum?.selectedAddress) connect().catch(() => {});
 })();
+
+// ─────────────────────────────────────────────────────── landing
+
+/**
+ * The word is the pitch. The typewriter walks the "wen …" memes everyone already knows, then
+ * lands on the question this game actually answers — that one gesture explains the name, the
+ * brand and the mechanic without a paragraph of copy. Behind it, an ambient synthetic random
+ * walk draws itself; synthetic on purpose, so the landing can never leak a real window.
+ * Both idle out whenever the connect screen is not the active one.
+ */
+function startLanding() {
+    const cycleEl = $('wenCycle');
+    const cv = $('heroChart');
+    if (!cycleEl || !cv) return;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const onLanding = () => $('screenConnect').classList.contains('active');
+
+    const FINAL = 'is this chart from?';
+    if (reduced) {
+        cycleEl.textContent = FINAL;
+    } else {
+        const lines = ['moon?', 'lambo?', 'listing?', FINAL];
+        let i = 0;
+        (async function loop() {
+            for (;;) {
+                const text = lines[i % lines.length];
+                for (let n = 1; n <= text.length; n++) {
+                    if (onLanding()) cycleEl.textContent = text.slice(0, n);
+                    await new Promise((r) => setTimeout(r, 52));
+                }
+                await new Promise((r) => setTimeout(r, text === FINAL ? 3600 : 950));
+                for (let n = text.length; n >= 0; n--) {
+                    if (onLanding()) cycleEl.textContent = text.slice(0, n);
+                    await new Promise((r) => setTimeout(r, 24));
+                }
+                i++;
+            }
+        })();
+    }
+
+    // ambient chart: a slow random walk, redrawn from scratch each pass
+    const ctx = cv.getContext('2d');
+    let pts = [];
+    let t = 0;
+    const step = () => {
+        if (!onLanding()) return requestAnimationFrame(step);
+        const dpr = window.devicePixelRatio || 1;
+        const w = cv.clientWidth, h = cv.clientHeight;
+        if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        if (t % 3 === 0) {
+            const last = pts.length ? pts[pts.length - 1] : h * 0.55;
+            pts.push(Math.min(h * 0.9, Math.max(h * 0.1, last + (Math.random() - 0.495) * h * 0.045)));
+            if (pts.length > 260) pts = [];   // start a fresh pass
+        }
+        t++;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = palette('--hairline');
+        ctx.lineWidth = 1;
+        for (let gy = 1; gy < 5; gy++) {
+            ctx.beginPath(); ctx.moveTo(0, (h * gy) / 5); ctx.lineTo(w, (h * gy) / 5); ctx.stroke();
+        }
+        if (pts.length > 1) {
+            ctx.beginPath();
+            pts.forEach((y, idx) => { const x = (idx / 259) * w; idx ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+            ctx.strokeStyle = palette('--ink-faint');
+            ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(((pts.length - 1) / 259) * w, pts[pts.length - 1], 3, 0, Math.PI * 2);
+            ctx.fillStyle = palette('--blue');
+            ctx.fill();
+        }
+        if (!reduced) requestAnimationFrame(step);
+    };
+    if (reduced) {
+        // one complete static line instead of an animation
+        let last = cv.clientHeight * 0.55 || 200;
+        for (let n = 0; n < 260; n++) {
+            last = Math.min(cv.clientHeight * 0.9, Math.max(cv.clientHeight * 0.1, last + (Math.random() - 0.495) * cv.clientHeight * 0.045));
+            pts.push(last);
+        }
+    }
+    step();
+}
 
 function toast(msg, ms = 2600) {
     const t = $('toast');
@@ -980,19 +1081,6 @@ function finish(payout) {
 }
 
 // ─────────────────────────────────────────────────────── chart
-
-/**
- * Canvas can't read CSS variables, so pull them off :root. Keeps styles.css the single source
- * of truth for colour — the chart drifting out of sync with the interface is how the old
- * palette ended up with a pink line nothing else used.
- */
-const paletteCache = new Map();
-function palette(name) {
-    if (!paletteCache.has(name)) {
-        paletteCache.set(name, getComputedStyle(document.documentElement).getPropertyValue(name).trim());
-    }
-    return paletteCache.get(name);
-}
 
 function drawChart() {
     const cv = $('chart');

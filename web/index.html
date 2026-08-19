@@ -33,22 +33,23 @@
   </div>
 </header>
 
-<!-- ─────────────────────────── connect ─────────────────────────── -->
+<!-- ─────────────────────────── connect ───────────────────────────
+     One statement, one button (the Wordle rule). The word IS the pitch: the typewriter walks
+     the memes everyone already knows, then lands on the question this game actually answers. -->
 <section id="screenConnect" class="screen active">
-  <div class="hero">
-    <div class="eyebrow">Live on Creditcoin CC3 Testnet</div>
-    <h1>You are somewhere in Ethereum's past.<br /><i>wen, exactly?</i></h1>
+  <canvas id="heroChart" aria-hidden="true"></canvas>
+  <div class="hero wen-hero">
+    <div class="eyebrow">live on Creditcoin CC3 testnet</div>
+    <h1 class="wen-word" aria-label="wen is this chart from?">wen</h1>
+    <p class="wen-cycle" aria-hidden="true"><span id="wenCycle">moon?</span><span class="caret"></span></p>
     <p class="sub">
-      You'll be dealt a real slice of Ethereum price history — but not told when it is.
-      A riddle is your only clue. Read the chart, work out <em>when</em> you are,
-      then bet on what came next.
+      You're dealt a real slice of Ethereum's past — never told <em>wen</em>.
+      One riddle, 45 seconds, then call what came next.
     </p>
-    <p class="sub small">
-      Every candle is a real Uniswap swap, cryptographically proven onto Creditcoin.
-      Nothing here is simulated.
+    <button id="btnConnectBig" class="primary">connect wallet to play</button>
+    <p class="fineprint center" id="netHint">
+      every candle is a real Uniswap swap, proven on Creditcoin · testnet CTC, no real value
     </p>
-    <button id="btnConnectBig" class="primary wide">connect wallet to play</button>
-    <p class="fineprint center" id="netHint">testnet CTC only · no real value</p>
   </div>
 </section>
 

@@ -42,12 +42,12 @@ const MONTHS = [
  * a false one is worse than a vague one. These claim nothing that did not happen.
  */
 const QUIET_RIDDLES = [
-    'No headline marks this stretch. The tape is all you get.',
-    'Nothing here made the news. It happened anyway.',
-    'No crisis, no launch, no announcement. Only price.',
-    'History remembers nothing about these days. The chain recorded all of them.',
-    'An ordinary week. Someone was still buying, someone was still selling.',
-    'This one you have to read, not remember.',
+    'wen no headline marks the stretch, and the tape is all you get?',
+    'wen nothing made the news, but it happened anyway?',
+    'wen there was no crisis, no launch, no announcement — only price?',
+    'wen history remembers nothing, but the chain recorded everything?',
+    'wen an ordinary week — someone still buying, someone still selling?',
+    'wen you have to read it, because nobody remembers it?',
 ];
 
 /** Stable pick, so relabelling the same window twice gives the same riddle. */
@@ -97,7 +97,7 @@ export const ERAS: EraSpec[] = [
         label: 'May 2021 — peak gas',
         date: '2021-05-12',
         startBlock: 0,
-        riddle: 'The chain worked fine. Everyone just stopped being able to afford it.',
+        riddle: 'wen the chain worked fine, but nobody could afford to use it?',
         answers: ['2021', 'may 2021', 'gas'],
     },
     {
@@ -105,7 +105,7 @@ export const ERAS: EraSpec[] = [
         label: 'August 2021 — the London fork',
         date: '2021-08-05',
         startBlock: 0,
-        riddle: 'The chain began destroying a piece of every fee it collected.',
+        riddle: 'wen the chain started burning a piece of every fee it collected?',
         answers: ['2021', 'aug 2021', 'august 2021', 'london', '1559', 'burn'],
     },
     {
@@ -113,7 +113,7 @@ export const ERAS: EraSpec[] = [
         label: 'October 2021 — the run to the all-time high',
         date: '2021-10-05',
         startBlock: 0,
-        riddle: 'Everything was going up, and everyone had already decided it would keep going up.',
+        riddle: 'wen everything was going up, and everyone agreed it would keep going up?',
         answers: ['2021', 'oct 2021', 'october 2021', 'bull'],
     },
     {
@@ -121,7 +121,7 @@ export const ERAS: EraSpec[] = [
         label: 'November 2021 — the top',
         date: '2021-11-08',
         startBlock: 0,
-        riddle: 'This was as high as it would get for a very long time. Nobody knew that yet.',
+        riddle: 'wen it would never be this high again — and nobody knew it yet?',
         answers: ['2021', 'nov 2021', 'november 2021', 'ath', 'top', 'peak'],
     },
     {
@@ -129,7 +129,7 @@ export const ERAS: EraSpec[] = [
         label: 'January 2022 — the turn',
         date: '2022-01-10',
         startBlock: 0,
-        riddle: 'The new year opened by quietly taking back what the old one had given.',
+        riddle: 'wen the new year quietly took back what the old one had given?',
         answers: ['2022', 'jan 2022', 'january 2022'],
     },
     {
@@ -137,7 +137,7 @@ export const ERAS: EraSpec[] = [
         label: 'March 2022 — the last bounce',
         date: '2022-03-14',
         startBlock: 0,
-        riddle: 'A recovery that everyone wanted to believe in, and which did not last.',
+        riddle: 'wen a recovery everyone wanted to believe in did not last?',
         answers: ['2022', 'mar 2022', 'march 2022'],
     },
     {
@@ -145,7 +145,7 @@ export const ERAS: EraSpec[] = [
         label: 'May 2022 — Luna collapses',
         date: '2022-05-08',
         startBlock: 0,
-        riddle: 'Something that promised to always be worth a dollar stopped being worth a dollar.',
+        riddle: 'wen something that promised to always be worth a dollar stopped being worth a dollar?',
         answers: ['2022', 'may 2022', 'luna', 'terra', 'ust'],
     },
     {
@@ -153,7 +153,7 @@ export const ERAS: EraSpec[] = [
         label: 'June 2022 — lenders freeze',
         date: '2022-06-12',
         startBlock: 0,
-        riddle: 'A lender that advertised withdrawals at any time stopped allowing them.',
+        riddle: 'wen a lender that advertised withdrawals at any time stopped allowing them?',
         answers: ['2022', 'jun 2022', 'june 2022', 'celsius', '3ac'],
     },
     {
@@ -161,7 +161,7 @@ export const ERAS: EraSpec[] = [
         label: 'September 2022 — the Merge',
         date: '2022-09-13',
         startBlock: 0,
-        riddle: 'The way blocks got made changed forever, and the price barely noticed.',
+        riddle: 'wen the way blocks got made changed forever, and the price barely noticed?',
         answers: ['2022', 'sep 2022', 'september 2022', 'merge', 'pos'],
     },
     {
@@ -169,7 +169,7 @@ export const ERAS: EraSpec[] = [
         label: 'November 2022 — FTX collapses',
         date: '2022-11-06',
         startBlock: 0,
-        riddle: 'An exchange everyone trusted turned out to be holding nothing at all.',
+        riddle: 'wen an exchange everyone trusted turned out to be holding nothing at all?',
         answers: ['2022', 'nov 2022', 'november 2022', 'ftx', 'sbf', 'alameda'],
     },
     {
@@ -177,7 +177,7 @@ export const ERAS: EraSpec[] = [
         label: 'December 2022 — capitulation',
         date: '2022-12-18',
         startBlock: 0,
-        riddle: 'Almost everyone had left. The few still here were very quiet about it.',
+        riddle: 'wen almost everyone had left, and the few still here were very quiet?',
         answers: ['2022', 'dec 2022', 'december 2022', 'bottom', 'capitulation'],
     },
     {
@@ -185,7 +185,7 @@ export const ERAS: EraSpec[] = [
         label: 'March 2023 — the USDC depeg',
         date: '2023-03-10',
         startBlock: 0,
-        riddle: 'A token backed by dollars found out where those dollars had been deposited.',
+        riddle: 'wen a token backed by dollars found out where those dollars were deposited?',
         answers: ['2023', 'mar 2023', 'march 2023', 'usdc', 'svb', 'depeg', 'bank'],
     },
     {
@@ -193,7 +193,7 @@ export const ERAS: EraSpec[] = [
         label: 'April 2023 — Shapella',
         date: '2023-04-12',
         startBlock: 0,
-        riddle: 'The coins people had locked up to secure the chain could finally come back out.',
+        riddle: 'wen the coins locked up to secure the chain could finally come back out?',
         answers: ['2023', 'apr 2023', 'april 2023', 'shapella', 'shanghai', 'withdrawals'],
     },
     {
@@ -201,7 +201,7 @@ export const ERAS: EraSpec[] = [
         label: 'June 2023 — the regulator moves',
         date: '2023-06-05',
         startBlock: 0,
-        riddle: 'The regulator sued the two largest exchanges in the same week.',
+        riddle: 'wen the regulator sued the two largest exchanges in the same week?',
         answers: ['2023', 'jun 2023', 'june 2023', 'sec', 'binance', 'coinbase'],
     },
     {
@@ -209,7 +209,7 @@ export const ERAS: EraSpec[] = [
         label: 'September 2023 — the quiet',
         date: '2023-09-08',
         startBlock: 0,
-        riddle: 'The flattest, dullest stretch the chain had seen in years. Nothing happened, loudly.',
+        riddle: 'wen nothing happened, loudly, for weeks on end?',
         answers: ['2023', 'sep 2023', 'september 2023', 'quiet', 'chop'],
     },
     {
@@ -217,7 +217,7 @@ export const ERAS: EraSpec[] = [
         label: 'December 2023 — pricing it in early',
         date: '2023-12-01',
         startBlock: 0,
-        riddle: 'Something was coming that had not been approved yet, and the market bid it anyway.',
+        riddle: 'wen the market bid up something that had not been approved yet?',
         answers: ['2023', 'dec 2023', 'december 2023'],
     },
     {
@@ -225,7 +225,7 @@ export const ERAS: EraSpec[] = [
         label: 'January 2024 — the spot ETF approval',
         date: '2024-01-10',
         startBlock: 0,
-        riddle: 'The regulator finally said yes to the thing it had refused for a decade.',
+        riddle: 'wen the regulator finally said yes to the thing it refused for a decade?',
         answers: ['2024', 'jan 2024', 'january 2024', 'etf'],
     },
     {
@@ -233,7 +233,7 @@ export const ERAS: EraSpec[] = [
         label: 'March 2024 — Dencun and the highs',
         date: '2024-03-13',
         startBlock: 0,
-        riddle: 'Wall Street finally got a wrapper it was allowed to buy.',
+        riddle: 'wen Wall Street finally got a wrapper it was allowed to buy?',
         answers: ['2024', 'mar 2024', 'march 2024', 'etf', 'dencun', 'blobs'],
     },
     {
@@ -241,7 +241,7 @@ export const ERAS: EraSpec[] = [
         label: 'July 2024 — the second wrapper',
         date: '2024-07-22',
         startBlock: 0,
-        riddle: 'The other big asset got the same wrapper the first one had, to much less noise.',
+        riddle: 'wen the other big asset got the same wrapper, to much less noise?',
         answers: ['2024', 'jul 2024', 'july 2024', 'eth etf', 'etf'],
     },
     {
@@ -249,7 +249,7 @@ export const ERAS: EraSpec[] = [
         label: 'August 2024 — the carry unwind',
         date: '2024-08-04',
         startBlock: 0,
-        riddle: 'An interest rate on the other side of the world moved, and everything sold at once.',
+        riddle: 'wen an interest rate across the world moved, and everything sold at once?',
         answers: ['2024', 'aug 2024', 'august 2024', 'yen', 'carry', 'crash'],
     },
     {
@@ -257,7 +257,7 @@ export const ERAS: EraSpec[] = [
         label: 'November 2024 — the election',
         date: '2024-11-05',
         startBlock: 0,
-        riddle: 'A vote counted entirely off-chain moved this chart more than anything on it.',
+        riddle: 'wen a vote counted entirely off-chain moved this chart more than anything on it?',
         answers: ['2024', 'nov 2024', 'november 2024', 'election'],
     },
 ];

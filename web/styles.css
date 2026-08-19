@@ -337,3 +337,23 @@ button { font-family: var(--sans); cursor: pointer; }
 .amount.down { color: var(--lose); }
 .verdict.lost { color: var(--lose); }
 .lb li b.neg { color: var(--lose); }
+
+/* ───────────────────────── landing: type is the hero ─────────────────────────
+   One statement, one button — the Wordle rule. The wordmark carries the page;
+   everything else stays quiet so the typewriter line can do the explaining. */
+#screenConnect { position: relative; }
+#screenConnect.active { display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#heroChart { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.8; }
+.wen-hero { position: relative; text-align: center; max-width: 640px; margin: 0; }
+.wen-hero .wen-word { font-family: var(--display); font-weight: 500; line-height: 0.9;
+                      font-size: clamp(96px, 22vw, 200px); letter-spacing: -2px; }
+.wen-cycle { font-family: var(--display); font-size: clamp(22px, 4.6vw, 40px); font-weight: 500;
+             color: var(--blue); margin-top: 4px; min-height: 1.3em; }
+.caret { display: inline-block; width: 0.55ch; height: 1em; margin-left: 3px; vertical-align: -0.12em;
+         background: var(--blue); animation: caret-blink 1.05s steps(1) infinite; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+.wen-hero .sub { margin-top: 26px; }
+.wen-hero .primary { width: auto; min-width: 300px; margin-top: 26px; }
+@media (prefers-reduced-motion: reduce) {
+    .caret { animation: none; }
+}

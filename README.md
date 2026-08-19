@@ -73,6 +73,10 @@ connect wallet → pick an ante → DEAL          (no deposit step — see below
          └─ place bets → settleRound() → resolveRound() → reveal
 ```
 
+- **Every riddle opens with the brand's own question** — *"wen something that promised to always
+  be worth a dollar stopped being worth a dollar?"* One honest caveat: the on-chain `riddleHash`
+  still pins the previous phrasing of each riddle; it re-pins automatically at the next registry
+  deployment, since registration hashes whatever the riddle says then.
 - You are **never shown the catalogue**. There is no index to download: the client fetches the
   single window it was dealt, keyed by a windowId that only exists once the ante is mined. It
   cannot enumerate the pool, or even learn how large it is.
