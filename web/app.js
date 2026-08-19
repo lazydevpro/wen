@@ -37,6 +37,20 @@ const CC3_PARAMS = {
 };
 
 const GRID_GAME = '0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC';
+
+/**
+ * Superseded deployments. Winnings live as in-contract credit, so every migration leaves any
+ * un-withdrawn player credit behind on the old address — invisible to a client that only knows
+ * the current game. On connect each of these is checked and anything found is offered back.
+ * withdraw() has no pause gate and player credit is not the bankroll, so recovery always works.
+ */
+const LEGACY_GAMES = [
+    '0x5659942E63a62017c11E8668abbD8FbfEb335939',
+    '0x0e60CdA4959849244095D1f0ED0F787e8Da39Ac3',
+    '0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d',
+    '0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A',
+];
+const LEGACY_ABI = ['function balances(address) view returns (uint256)', 'function withdraw(uint256)'];
 const REGISTRY = '0x5156A5BD8F3304eCE58c12F097B98C11600ba2A5';
 
 const GAME_ABI = [
@@ -77,6 +91,9 @@ const GAME_ABI = [
     'error RevealCountMismatch(uint256 expected,uint256 got)',
     'error BadCandleProof(uint256 index)',
     'error InsufficientBankroll(uint256 needed,uint256 have)',
+    // ChartRegistry errors surface through game calls; without these they print as "unknown"
+    'error UnknownWindow(bytes32 windowId)',
+    'error BadMerkleProof(uint256 candleIndex)',
 ];
 
 /** Turn a revert into something a player can act on. */
@@ -309,6 +326,39 @@ async function connect() {
     await refreshCredit();
     refreshFaucet();
     show('screenLobby');
+    checkLegacyCredit().catch(() => {});
+}
+
+/** Anything left behind on a superseded game is surfaced as a one-click recovery. */
+async function checkLegacyCredit() {
+    const found = [];
+    for (const addr of LEGACY_GAMES) {
+        const g = new Contract(addr, LEGACY_ABI, state.signer);
+        const bal = await g.balances(state.address);
+        if (bal > 0n) found.push({g, bal});
+    }
+    const total = found.reduce((a, f) => a + f.bal, 0n);
+    const panel = $('legacyPanel');
+    if (!panel) return;
+    panel.hidden = total === 0n;
+    if (total === 0n) return;
+
+    $('legacyAmount').textContent = Number(formatEther(total)).toFixed(2);
+    $('btnLegacy').onclick = async () => {
+        $('btnLegacy').disabled = true;
+        try {
+            for (const f of found) {
+                toast(`confirm recovery of ${Number(formatEther(f.bal)).toFixed(2)} CTC…`);
+                await (await f.g.withdraw(f.bal)).wait();
+            }
+            toast('recovered to your wallet');
+            panel.hidden = true;
+            await refreshCredit();
+        } catch (e) {
+            toast(explain(e));
+            $('btnLegacy').disabled = false;
+        }
+    };
 }
 
 /** Keep a little native CTC aside so attaching value can never leave the player unable to pay gas. */

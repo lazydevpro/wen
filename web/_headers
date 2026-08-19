@@ -1,0 +1,7 @@
+# Every deploy may change contract addresses inside app.js, and a stale client points at a
+# drained legacy game whose every action reverts. no-cache does NOT mean "don't cache" — it means
+# revalidate before use, so unchanged files still ride the ETag to a 304 and only real deploys
+# actually re-download. A user found this the hard way: an old cached app.js dealt against a
+# migrated game and got "execution reverted" on every hand.
+/*
+  Cache-Control: no-cache
