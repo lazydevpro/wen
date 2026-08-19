@@ -175,7 +175,6 @@
         <!-- chart is drawn as pixels; no numeric series exists in the DOM -->
         <canvas id="chart"></canvas>
         <div id="gridOverlay" class="grid-overlay"></div>
-        <div id="dealVeil" class="deal-veil"><div class="spinner"></div><p id="veilText">waiting for the deal…</p></div>
       </div>
     </main>
   </div>
@@ -197,6 +196,20 @@
     </div>
   </div>
 </section>
+
+<!-- Transaction progress as a real modal, not a flat overlay: the page dims, the wait is
+     narrated, and the pulsing cells echo the game's own grid. Not user-dismissable — the
+     transaction doesn't stop because the dialog closed, so closing would only hide the truth. -->
+<dialog id="txDialog" closedby="none">
+  <div class="tx-cells" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+  <p id="txStatus">…</p>
+  <div id="txActions" hidden><button id="btnTxBail" class="ghost">back to the table</button></div>
+</dialog>
+
+<!-- The riddle deserves an entrance: full-screen, typed out, then it glides to its panel slot. -->
+<div id="riddleIntro" hidden aria-hidden="true">
+  <p id="riddleIntroText"></p>
+</div>
 
 <div id="toast" class="toast"></div>
 

@@ -351,6 +351,118 @@ function show(screen) {
     $(screen).classList.add('active');
 }
 
+// ─────────────────────────────────────────────── transaction dialog
+
+/**
+ * Transaction progress as a modal, not a flat overlay. showModal() dims and inerts the page,
+ * which is exactly right here: during a signature or a pending transaction there is nothing
+ * else the player can meaningfully do. Never user-dismissable — closing it wouldn't stop the
+ * transaction, only hide it. Safe with the phase rule because it only ever opens in DEALING
+ * and SETTLING, when the clock is not running.
+ */
+function txOpen(msg) {
+    const d = $('txDialog');
+    d.classList.remove('error');
+    $('txStatus').textContent = msg;
+    $('txActions').hidden = true;
+    if (!d.open) d.showModal();
+}
+
+function txSet(msg) {
+    $('txStatus').textContent = msg;
+}
+
+function txClose() {
+    const d = $('txDialog');
+    if (d.open) d.close();
+}
+
+/** Terminal state: message plus the one useful action. */
+function txError(msg, onBail) {
+    const d = $('txDialog');
+    d.classList.add('error');
+    $('txStatus').innerHTML = `<strong>${msg}</strong>`;
+    $('txActions').hidden = false;
+    $('btnTxBail').onclick = () => { txClose(); onBail(); };
+    if (!d.open) d.showModal();
+}
+
+// ─────────────────────────────────────────────── skeleton + riddle intro
+
+/**
+ * While the deal confirms, the table loads in its own shape — shimmer cells where the grid
+ * will be, shimmer bars where the chart will be — instead of a spinner over a blank.
+ */
+function skeletonTable() {
+    $('riddleText').textContent = '';
+    $('riddleText').classList.add('skel', 'skel-fill');
+    $('clock').textContent = '—';
+    $('anchorPrice').textContent = '$ —';
+    document.querySelector('.canvas-wrap').classList.add('skel');
+    const cv = $('chart');
+    cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+
+    const ov = $('gridOverlay');
+    ov.style.gridTemplateColumns = 'repeat(8, 1fr)';
+    ov.style.gridTemplateRows = 'repeat(12, 1fr)';
+    ov.innerHTML = Array.from({length: 96}, () => '<div class="cell skel"><i class="skel-fill"></i></div>').join('');
+}
+
+function clearSkeleton() {
+    $('riddleText').classList.remove('skel', 'skel-fill');
+    document.querySelector('.canvas-wrap').classList.remove('skel');
+}
+
+/**
+ * The riddle's entrance: typed out centre-stage, held a beat, then a FLIP glide into the
+ * panel slot it actually lives in. The clock is armed only after this finishes, so the
+ * ceremony never eats decision time. Reduced motion skips straight to the table.
+ */
+async function riddleIntroPlay(text) {
+    // Skip the ceremony when nobody is watching. A hidden tab clamps timers to one tick per
+    // second, which would stretch this to minutes — all while the ON-CHAIN decision window
+    // keeps counting. The ceremony must never spend the player's real budget.
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) return;
+    const wrap = $('riddleIntro');
+    const el = $('riddleIntroText');
+    el.style.transform = '';
+    wrap.classList.remove('moving');
+    el.textContent = '';
+    wrap.hidden = false;
+
+    // wall-clock bounded for the same reason: if timers are throttled mid-intro, finish the
+    // text immediately rather than crawling
+    const started = performance.now();
+    for (let n = 1; n <= text.length; n++) {
+        el.textContent = text.slice(0, n);
+        if (performance.now() - started > 2600 || document.hidden) { el.textContent = text; break; }
+        await new Promise((r) => setTimeout(r, 24));
+    }
+    if (!document.hidden) await new Promise((r) => setTimeout(r, 620));
+
+    // FLIP: from centre-stage to wherever the real blockquote sits right now
+    const from = el.getBoundingClientRect();
+    const to = $('riddleText').getBoundingClientRect();
+    const scale = to.width / from.width;
+    wrap.classList.add('moving');
+    el.style.transform =
+        `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${scale})`;
+    await new Promise((r) => setTimeout(r, 640));
+    wrap.hidden = true;
+    wrap.classList.remove('moving');
+    el.style.transform = '';
+}
+
+/** Total ceremony budget, wall-clock. Past this the table simply appears — never blocks the round. */
+const INTRO_MAX_MS = 5000;
+async function riddleIntro(text) {
+    await Promise.race([riddleIntroPlay(text), new Promise((r) => setTimeout(r, INTRO_MAX_MS))]);
+    // idempotent finalisation, whichever path won
+    $('riddleIntro').hidden = true;
+    $('riddleIntro').classList.remove('moving');
+    $('riddleIntroText').style.transform = '';
+}
+
 // ─────────────────────────────────────────────────────── wallet
 
 /** Wallets disagree about how they report "I don't know that chain". Catch all the variants. */
@@ -652,21 +764,18 @@ async function deal() {
     state.win = null;
     setPhase(PHASE.DEALING);
 
-    // show the play screen with the chart hidden — the veil is the honest bit:
-    // we genuinely do not know the window yet.
+    // the table loads in its own shape while the deal confirms — we genuinely do not
+    // know the window yet, and the skeleton says so without a spinner
     show('screenPlay');
-    $('dealVeil').classList.add('on');
-    $('veilText').textContent = 'confirm the ante in your wallet…';
-    $('riddleText').textContent = '…';
-    $('clock').textContent = '—';
-    $('gridOverlay').innerHTML = '';
+    skeletonTable();
+    txOpen('confirm the ante in your wallet…');
     syncBets();
 
     try {
         const anteWei = parseEther(String(state.ante));
         // whatever credit doesn't cover rides along as value — no separate deposit
         const tx = await state.game.startRound(anteWei, {value: shortfall(anteWei)});
-        $('veilText').textContent = 'ante on-chain — dealing…';
+        txSet('ante on-chain — dealing…');
         const rcpt = await tx.wait();
 
         // the window is only knowable from the receipt
@@ -682,17 +791,22 @@ async function deal() {
         state.win = await fetchWindow(wid);
 
         await refreshCredit();
-        openTable();
+        txClose();
+        populateTable();                         // real content lands under the intro overlay
+        await riddleIntro(state.win.riddle);     // typed centre-stage, then glides to its slot
+        armClock();                              // only now does decision time start
     } catch (e) {
-        $('dealVeil').classList.remove('on');
+        txClose();
         toast(explain(e));
         setPhase(PHASE.IDLE);
         show('screenLobby');
     }
 }
 
-function openTable() {
+/** Everything visible on the table, but no clock — the riddle intro plays over this. */
+function populateTable() {
     const w = state.win;
+    clearSkeleton();
     $('riddleText').textContent = w.riddle;
     $('guessInput').value = '';
     $('guessResult').textContent = '';
@@ -706,13 +820,15 @@ function openTable() {
     $('paneSimple').hidden = true;
     $('gridOverlay').classList.remove('dimmed');
     syncBets();
-    $('dealVeil').classList.remove('on');
 
     // canvas must be measured after it is visible
     drawChart();
     setTimeout(drawChart, 60);
     window.addEventListener('resize', drawChart, {passive: true});
+}
 
+/** Decision time begins here, never during the ceremony. */
+function armClock() {
     setPhase(PHASE.BETTING);
     startClock();
 }
@@ -795,7 +911,8 @@ function syncBets() {
     // less than the ante, which is exactly what stranded early testers: they picked a 250x
     // cell, the contract refused, and the clock ate the ante. Mark them up front.
     const budget = state.maxExposure > 0 ? state.maxExposure : Infinity;
-    document.querySelectorAll('.cell').forEach((el) => {
+    // [data-key] excludes skeleton cells, which are placeholders with nothing to price
+    document.querySelectorAll('.cell[data-key]').forEach((el) => {
         el.classList.toggle('picked', state.picks.has(el.dataset.key));
         const [t, p] = el.dataset.key.split(':').map(Number);
         const cell = state.win?.grid.find((c) => c.t === t && c.p === p);
@@ -924,8 +1041,7 @@ async function lockIn() {
     const simple = state.mode === 'simple';
 
     $('btnLockIn').disabled = true;
-    $('dealVeil').classList.add('on');
-    $('veilText').textContent = 'confirm your bets…';
+    txOpen('confirm your bets…');
 
     try {
         // the contract deducts (totalStake - ante); attach whatever credit doesn't cover
@@ -935,12 +1051,12 @@ async function lockIn() {
         const tx = simple
             ? await state.game.settleDirection(state.roundId, state.dir, stakeWei, {value: shortfall(extra)})
             : await state.game.settleRound(state.roundId, ts, ps, amts, {value: shortfall(extra)});
-        $('veilText').textContent = 'bets locked in — revealing…';
+        txSet('locking your bets on-chain…');
         await tx.wait();
         await refreshCredit();
 
         state.reveal = await fetchReveal(state.win.windowId, state.roundId);
-        $('dealVeil').classList.remove('on');
+        txClose();
         setPhase(PHASE.REVEALING);
         await animateReveal();
         await resolveOnChain();
@@ -955,20 +1071,10 @@ async function lockIn() {
 function showDeadEnd(message) {
     clearInterval(state.timer);
     setPhase(PHASE.RESULT);   // nothing is at stake any more; let the player out
-    $('dealVeil').classList.add('on');
-    $('veilText').innerHTML =
-        `<strong style="color:var(--red)">${message}</strong><br /><br />` +
-        `<button id="btnBail" class="ghost">back to the table</button>`;
-    document.querySelector('.spinner')?.setAttribute('style', 'display:none');
-    setTimeout(() => {
-        const b = $('btnBail');
-        if (b) b.onclick = () => {
-            document.querySelector('.spinner')?.removeAttribute('style');
-            $('dealVeil').classList.remove('on');
-            setPhase(PHASE.IDLE);
-            show('screenLobby');
-        };
-    }, 0);
+    txError(message, () => {
+        setPhase(PHASE.IDLE);
+        show('screenLobby');
+    });
 }
 
 async function animateReveal() {
@@ -1220,6 +1326,8 @@ function wireControls() {
     document.querySelectorAll('[data-stake]').forEach((btn) => {
         btn.onclick = () => setStakeIdx(state.stakeIdx + (btn.dataset.stake === '+' ? 1 : -1));
     });
+
+    $('txDialog').addEventListener('cancel', (e) => e.preventDefault());
 
     window.ethereum?.on?.('accountsChanged', () => location.reload());
     window.ethereum?.on?.('chainChanged', () => location.reload());
