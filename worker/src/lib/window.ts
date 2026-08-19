@@ -11,15 +11,19 @@ export const VISIBLE_FRAC = 0.2;
 export const GRID_TIME_STEPS = 8;
 
 /**
- * Price bands per column. Was 12.
+ * Price bands per column.
  *
- * Multiplier = (1 - edge) / probability, so a LOW multiplier needs a band wide enough to be
- * likely. At 12 bands the likeliest cell paid ~4.3x with the runway, which meant one lucky cell
- * covered four wrong ones and hitting anything felt like winning. Five wider bands bring that to
- * ~1.5x: a single hit is now unremarkable, and covering several cells is the only route to a
- * real return — which costs proportionally more. Measured with `pnpm sweep-grid`.
+ * Briefly 5, to chase a ~1.4x cheapest cell. Restored to 12 — the finer grid is the game, and a
+ * coarse 5-row board reads as a different, blunter product.
+ *
+ * The cost of that choice, measured rather than assumed (`pnpm sweep-grid`): multiplier is
+ * (1 - edge) / probability, so a cheap cell has to be a LIKELY cell. Twelve bands split the
+ * distribution twelve ways, so the likeliest cell sits near 20% and its fair price is ~4x. No
+ * edge setting moves that without either paying pennies on a fair bet or widening the bands so
+ * far that a third of the grid is unwinnable — at 12 bands and 9-sigma the cheapest cell only
+ * reaches 2.04x and the house loses 67%. The floor stands at (1 - edge).
  */
-export const GRID_PRICE_BANDS = 5;
+export const GRID_PRICE_BANDS = 12;
 
 /**
  * Hidden candles of runway before the first bettable column.
@@ -54,8 +58,76 @@ export const HOUSE_EDGE = 0.162;
 /** Hard cap — the top multiplier dominates bankroll variance. */
 export const MAX_MULTIPLIER = 250;
 
-/** Never quote a multiplier below this; sub-1x cells still return something. */
-export const MIN_MULTIPLIER = 0.3;
+/** Never quote a multiplier below this. The anchor row is deliberately pinned here. */
+export const MIN_MULTIPLIER = 1.0;
+
+/**
+ * The payout ladder, by distance from the anchor row — AUTHORED, not derived.
+ *
+ * Everything before this priced each cell at its fair odds, (1 - edge) / probability, which
+ * gives every cell identical expected value. That is one convention, not a law, and it carries
+ * a consequence: with twelve bands the likeliest cell sits near 20%, so its fair price is ~4x
+ * and no edge setting brings it to 1x without paying pennies on a fair bet.
+ *
+ * Roulette does not work that way. A straight-up number pays 35:1 flat; some bets are simply
+ * worse value than others and the house edge falls out in aggregate. So these are chosen round
+ * numbers — bet the anchor row and you get your stake back, bet the far edge and it pays big —
+ * and the EDGE is what gets solved for, per column, rather than the prices.
+ *
+ * Ratios only. calibrateLadder() scales the spread per column so every column carries the same
+ * edge, which matters: a single flat ladder made columns 5-7 positive-EV (107%, 111%, 137%),
+ * and betting only the late columns beat the house outright.
+ */
+export const MULT_SHAPE = [1, 4, 10, 25, 60, 150];
+
+/**
+ * The ladder per column, calibrated against REAL outcomes rather than the random-walk model.
+ *
+ * Calibrating on the model looked right and was not: the model expects the price to sit near the
+ * anchor early on, but real paths trend, so they travel further than a random walk predicts —
+ * and most so in the first columns. Priced on the model, columns 0 and 1 came out at 123% and
+ * 110% against real history, so betting only the opening columns beat the house. Priced on the
+ * history itself, every column sits on target.
+ *
+ * Distance is measured in the window's OWN band heights, and band height scales with that
+ * window's sigma, so one pooled table is valid across windows of different volatility.
+ *
+ * Regenerate with `pnpm calibrate-ladder` whenever the pool changes materially.
+ */
+export const LADDER_BY_COLUMN = [
+    [1, 5.62, 14.86, 37.97, 91.88, 230.5],
+    [1, 5, 13.01, 33.02, 79.72, 199.8],
+    [1, 5.01, 13.04, 33.12, 79.95, 200.38],
+    [1, 5.46, 14.37, 36.65, 88.64, 222.33],
+    [1, 4.23, 10.68, 26.81, 64.45, 161.24],
+    [1, 3.36, 8.08, 19.87, 47.38, 118.13],
+    [1, 3.28, 7.83, 19.22, 45.79, 114.11],
+    [1, 2.82, 6.45, 15.55, 36.76, 91.31],
+];
+
+/** Rows either side of centre count as the same distance: 12 bands -> d = 0..5. */
+export function bandDistance(p: number, bands = GRID_PRICE_BANDS): number {
+    return Math.floor(Math.abs(p - (bands - 1) / 2));
+}
+
+/**
+ * Scale the ladder for one column so its modelled RTP equals the target, with d=0 pinned at 1x.
+ *
+ * ladder[d] = 1 + (shape[d] - 1) * k, and k is solved from the column's own probabilities. Late
+ * columns (where the price has had time to travel far) therefore pay LESS for distance than
+ * early ones — which is exactly right, and is what removes the positive-EV columns.
+ */
+export function calibrateLadder(probsByDistance: number[], bands = GRID_PRICE_BANDS): number[] {
+    const target = (1 - HOUSE_EDGE) * bands;
+    const inGrid = probsByDistance.reduce((a, b) => a + b, 0);
+    const spread = probsByDistance.reduce((a, pd, d) => a + pd * (MULT_SHAPE[Math.min(d, MULT_SHAPE.length - 1)] - 1), 0);
+    // a column with no spread at all cannot be calibrated; fall back to the flat shape
+    const k = spread > 1e-9 ? (target - inGrid) / spread : 1;
+    return MULT_SHAPE.map((sh) => {
+        const m = 1 + (sh - 1) * Math.max(0, k);
+        return Math.round(Math.min(MAX_MULTIPLIER, Math.max(MIN_MULTIPLIER, m)) * 100) / 100;
+    });
+}
 
 /**
  * Total grid height in standard deviations of the horizon.
@@ -243,15 +315,13 @@ export function buildGrid(
 
     const grid: GridCell[] = [];
     for (let t = 0; t < timeSteps; t++) {
+        // Prices come from the calibrated table, not from this window's modelled probabilities.
+        // The Monte Carlo above still runs — `probability` is kept for the diagnostics in
+        // simulate.ts — but it no longer decides what anything costs.
+        const ladder = LADDER_BY_COLUMN[Math.min(t, LADDER_BY_COLUMN.length - 1)];
         for (let p = 0; p < bands; p++) {
-            const prob = hits[t][p] / sims;
-            let mult: number;
-            if (prob <= 0) {
-                mult = MAX_MULTIPLIER;
-            } else {
-                mult = Math.min(MAX_MULTIPLIER, Math.max(MIN_MULTIPLIER, ((1 - HOUSE_EDGE) / prob)));
-            }
-            grid.push({t, p, probability: prob, multiplier: Math.round(mult * 100) / 100});
+            const d = Math.min(bandDistance(p, bands), ladder.length - 1);
+            grid.push({t, p, probability: hits[t][p] / sims, multiplier: ladder[d]});
         }
     }
     return {grid, bandHeight};

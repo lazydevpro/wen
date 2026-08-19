@@ -64,12 +64,17 @@ async function main() {
 
     // ---- 3. bet ----
     const reveal = JSON.parse(readFileSync(`${REVEAL_DIR}${key}.json`, 'utf8'));
-    const winningBand = reveal.outcome[0].p;
+    // A column whose price left the grid has p = -1 and no cell to bet; pick the first column
+    // that actually landed somewhere, or there is nothing to demonstrate.
+    const winIdx = reveal.outcome.findIndex((o: any) => o.p >= 0);
+    if (winIdx < 0) throw new Error('this window never lands inside the grid — try again');
+    const winningBand = reveal.outcome[winIdx].p;
+    const loseIdx = winIdx === 0 ? 1 : 0;
     const losingBand = winningBand === 0 ? 1 : 0;
 
     // one bet that hits, one that misses — proves both paths
-    const multWin = await registry.multiplierAt(windowId, 0, winningBand);
-    const multLose = await registry.multiplierAt(windowId, 1, losingBand);
+    const multWin = await registry.multiplierAt(windowId, winIdx, winningBand);
+    const multLose = await registry.multiplierAt(windowId, loseIdx, losingBand);
     const cap: bigint = await game.maxRoundExposure();
 
     // Worst case is EVERY cell hitting, so the cap must be checked across all of them, not
@@ -81,15 +86,15 @@ async function main() {
     while (worst() > cap && loseStake > parseEther('0.001')) loseStake /= 2n;
     while (worst() > cap && anteUse > parseEther('0.02')) anteUse /= 2n;
 
-    const ts = [0, 1];
+    const ts = [winIdx, loseIdx];
     const ps = [winningBand, losingBand];
     const amts = [anteUse, loseStake];
     const staked = amts.reduce((a, b) => a + b, 0n);
-    console.log(`    t0/band${winningBand} @ ${Number(multWin) / 1e4}x   t1/band${losingBand} @ ${Number(multLose) / 1e4}x`);
+    console.log(`    t${winIdx}/band${winningBand} @ ${Number(multWin) / 1e4}x   t${loseIdx}/band${losingBand} @ ${Number(multLose) / 1e4}x`);
     console.log(`    worst-case payout ${formatEther(worst())} CTC vs cap ${formatEther(cap)} CTC`);
 
     if (staked < ANTE) throw new Error(`sized stake ${formatEther(staked)} fell below ante ${formatEther(ANTE)}`);
-    console.log(`\n[3] settleRound — betting t0/band${winningBand} (hits) and t1/band${losingBand} (misses)`);
+    console.log(`\n[3] settleRound — betting t${winIdx}/band${winningBand} (hits) and t${loseIdx}/band${losingBand} (misses)`);
     console.log(`    staked: ${formatEther(staked)} CTC`);
     // the ante is already held by the round; attach only what credit misses of the difference
     credit = await game.balances(wallet.address);

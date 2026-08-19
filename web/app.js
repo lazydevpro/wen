@@ -50,7 +50,7 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x783432Bf4Eb7A15eE95D003b7a13404F6C70456c';
+const GRID_GAME = '0x6DA7B83B5069b2213F9f1233EB545b794801383E';
 
 /**
  * Superseded deployments. Winnings live as in-contract credit, so every migration leaves any
@@ -64,9 +64,10 @@ const LEGACY_GAMES = [
     '0xf16a2151144d5394D89445F0BcC20A2e6db8Fc2d',
     '0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A',
     '0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC',
+    '0x783432Bf4Eb7A15eE95D003b7a13404F6C70456c',
 ];
 const LEGACY_ABI = ['function balances(address) view returns (uint256)', 'function withdraw(uint256)'];
-const REGISTRY = '0x12FEA1E6A6664e7631BA6f2a3ac625Da9dC193F8';
+const REGISTRY = '0x8965D4425622e4cd44A590c8985dD35b0daC2797';
 
 const GAME_ABI = [
     'function deposit() external payable',
@@ -1020,7 +1021,7 @@ function setMode(mode) {
     $('gridOverlay').classList.toggle('dimmed', mode === 'simple');
 
     $('oddsNote').innerHTML = mode === 'grid'
-        ? 'Multipliers come from the <strong>visible</strong> candles only — the odds cannot leak the hidden path.'
+        ? 'Prices depend only on <strong>how far from the last known price</strong> a cell sits — never on the hidden path.'
         : 'Up pays less because the pool drifts up: <strong>54%</strong> of windows close higher. Beat 59% on your up calls and the edge is yours.';
 
     document.querySelectorAll('.cell.picked').forEach((el) => el.classList.remove('picked'));

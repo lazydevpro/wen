@@ -34,8 +34,8 @@ specifically**, because wen's core axis is depth into the past:
 | Contract | Address |
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0x12FEA1E6A6664e7631BA6f2a3ac625Da9dC193F8` |
-| `GridGame` | `0x783432Bf4Eb7A15eE95D003b7a13404F6C70456c` |
+| `ChartRegistry` | `0x8965D4425622e4cd44A590c8985dD35b0daC2797` |
+| `GridGame` | `0x6DA7B83B5069b2213F9f1233EB545b794801383E` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
@@ -84,8 +84,8 @@ connect wallet → pick an ante → DEAL          (no deposit step — see below
 - **The chart travels two steps before the grid begins.** Those candles happen and are drawn —
   they simply aren't bettable. Starting the grid pinned to the anchor made the first column so
   concentrated that a couple of cells carried nearly all the probability.
-- **A grid of 8 × 5 (time × price) cells** sits over the future, each printed with its multiplier.
-- **Multipliers are computed from the visible candles only** — the odds cannot leak the hidden path.
+- **A grid of 8 × 12 (time × price) cells** sits over the future, each printed with its multiplier.
+- **Multipliers are authored, not derived** — see below. They depend only on a cell's position, never on the hidden path.
 - The chart plays forward; cells the real price path crosses pay out.
 
 **Or play it simple.** After the deal you can switch to a two-button game: does the chart end
@@ -140,45 +140,44 @@ The per-round exposure cap (bankroll ÷ 20) applies to the **worst case where ev
 A 250× cell can therefore only carry `cap / 250` CTC — which can be *less than the ante*, forcing
 bets to be spread rather than concentrated. The UI surfaces this before you can hit the revert.
 
-## House edge — calibrated three times, and it still moved
+## Multipliers are authored, not derived
 
-Every calibration here was measured against real outcomes, and every one of them was wrong in a
-way the previous one could not have predicted.
+Every version before this priced a cell at its *fair odds* — `(1 − edge) / probability` — so
+every cell carried identical expected value. That is a convention, not a law, and it has a hard
+consequence: with twelve bands the likeliest cell sits near 20%, so its fair price is ~4×. No
+edge setting brings that to 1× without paying pennies on a fair bet.
 
-**±3σ, 12 bands.** Real paths travel nowhere near that far, so the outer bands were unreachable
-and players bought cells that **could not win**. Realised edge: **56%**.
+Roulette doesn't work that way. A straight-up number pays 35:1 flat; some bets are simply worse
+value than others, and the edge falls out in aggregate. So the prices here are **chosen round
+numbers by distance from the anchor row**, and the *edge* is what gets solved for:
 
-**2.55σ.** Fixed against the six windows that existed then. Building the 120-window pool showed it
-never generalised: 87% RTP, a **13% edge** where 3.7% was intended. Six price paths cannot pin a
-distribution.
+| distance from anchor | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| ratio | **1×** | 4× | 10× | 25× | 60× | 150× |
 
-**3.4σ, 11% design edge.** Landed 90.3% realised. Correct on paper, wrong in play — per-cell EV
-was fair, but the likeliest cell paid ~3–4×, so one lucky cell covered four wrong ones and hitting
-anything felt like winning.
+Bet the row the price is already on and you get your stake back. Bet the far edge and it pays big.
 
-**Now: 5 bands, 4.5σ, two steps of runway, 16.2% design edge → 88.6% realised (11.4% edge).**
-Multiplier = (1 − edge) / probability, so a *low* multiplier needs a *likely* cell. Five wider
-bands bring the cheapest cell from 4.31× to **1.41×**: hitting it returns less than the cost of
-covering the cells around it, so a real return means reading the chart rather than blanketing it.
-A round played live after the change hit its winning cell and still finished **−0.08 CTC**.
+**The scale is solved per column, and it has to be.** A single flat ladder made the late columns
+positive-EV — 107%, 111%, 137% — so betting only columns 5–7 beat the house outright. Later
+columns pay *less* for distance, because the price has had time to travel there.
 
-| shape | cheapest cell | realised RTP | dead cells |
-|---|---|---|---|
-| 12 bands, 3.4σ | 4.31× | 76.8% | 0.9% |
-| 12 bands, 4.5σ | 3.35× | 89.7% | 7.1% |
-| 6 bands, 4.5σ | 2.04× | 98.7% | 2.7% |
-| **5 bands, 4.5σ** | **1.50×** | **93.9%** | **0.2%** |
-| 5 bands, 9.0σ | 0.99× | 279% ❌ | 35.7% |
+**Calibrate on history, not on the model.** Solving the scale against the random-walk model
+looked right and wasn't: real paths trend, so they travel further than a random walk expects, and
+most so in the opening columns. Priced on the model, columns 0 and 1 measured **123%** and
+**110%** against real history. Priced on the history itself, every one of the eight columns lands
+on **86.0%** — a 14% house edge with no exploitable column anywhere.
 
-That last row is the wall. Pushing the cheapest cell to 1.0× needs bands so wide that a third of
-the grid is unwinnable, and the rare real path landing on a "dead" cell pays 250× — the house
-loses catastrophically. **A multiplier below 0.84× cannot exist at all**: it is (1 − edge), the
-price of a cell that is certain.
+Regenerate with `pnpm --dir worker calibrate-ladder` whenever the pool changes.
 
-The design number always overshoots the target because reality runs hotter than the model, and by
-a margin that depends on grid shape — 1.3 points at 12 bands, 5.5 at 5. Re-measure with
-`pnpm --dir worker simulate` and `pnpm --dir worker sweep-grid` after any shape change; never
-assume the previous calibration carries.
+### The three calibrations before this
+
+Each was measured against real outcomes, and each was wrong in a way the previous couldn't have
+predicted. **±3σ** left the outer bands unreachable — players bought cells that could not win, at
+a **56%** realised edge. **2.55σ**, fitted to the six windows that then existed, never
+generalised: 87% RTP against 120 windows, a 13% edge where 3.7% was intended. **3.4σ at an 11%
+design edge** landed 90.3% realised — correct on paper, but the likeliest cell paid 3–4×, so one
+lucky cell covered four wrong ones and hitting anything felt like winning. That last failure is
+what the authored ladder fixes.
 
 ## Repo
 
