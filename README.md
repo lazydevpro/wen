@@ -34,8 +34,8 @@ specifically**, because wen's core axis is depth into the past:
 | Contract | Address |
 |---|---|
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61` |
-| `GridGame` | `0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A` |
+| `ChartRegistry` | `0x5156A5BD8F3304eCE58c12F097B98C11600ba2A5` |
+| `GridGame` | `0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
@@ -83,15 +83,15 @@ connect wallet → pick an ante → DEAL          (no deposit step — see below
 
 **Or play it simple.** After the deal you can switch to a two-button game: does the chart end
 higher or lower than the last known price? Less to think about, less to win. The two sides are
-priced differently — **up 1.80×, down 2.00×** — because the pool is not a fair coin: measured over
+priced differently — **up 1.70×, down 1.90×** — because the pool is not a fair coin: measured over
 all 120 windows the final candle closes up 54.2% of the time. Paying both sides alike would let an
-"always up" bot play at break-even, so each side is priced against its own measured frequency:
+"always up" bot milk the house, so each side is priced against its own measured frequency:
 
 | strategy | win rate | EV per 1 CTC |
 |---|---|---|
-| always up | 54.2% | 0.975 |
-| always down | 45.8% | 0.917 |
-| coin flip | 50% | 0.946 |
+| always up | 54.2% | 0.921 |
+| always down | 45.8% | 0.870 |
+| coin flip | 50% | 0.896 |
 
 A player who actually recognises the era can push toward break-even, which is the point — knowing
 the history is meant to be worth something. Both modes share the same deal, clock and forfeit; only
@@ -155,8 +155,13 @@ times the target. Six paths cannot pin a distribution. The first calibration cor
 | 3.7 σ | 98.2% |
 | 4.5 σ | 106.9% (house loses) |
 
-Now at a **2.41% realised edge**, with 117 of 960 columns being total losses for a uniform bettor
-(the price left the grid entirely).
+**Third pass — deliberate, not a bug fix.** At a 2.41% realised edge, real play felt wrong in the
+other direction: per-cell EV was fair, but covering the five likeliest cells of an early column
+returned *something* 94% of rounds, so sessions barely bled and most hands felt like wins. The
+designed edge moved from 3.7% to **11%**, measuring **90.3% realised RTP (9.7% edge)** over the
+same 960 outcomes. The same 1.3-point model-vs-reality gap appeared at every calibration, which is
+why the design target overshoots. Coverage still pays back ~89% of stake per round in expectation —
+the game is winnable on a read, not on coverage.
 
 **The harness was lying too.** `simulate.ts` skipped columns where the price left the grid —
 removing them from the denominator as well as the numerator, and so discarding precisely the

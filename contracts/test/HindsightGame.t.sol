@@ -317,7 +317,7 @@ contract HindsightGameTest is Test {
 
         uint32 mult = closedUp ? game.DIRECTION_UP_MULT() : game.DIRECTION_DOWN_MULT();
         assertEq(game.balances(PLAYER) - before, (uint256(ante) * mult) / game.MULT_SCALE(), "direction win pays");
-        assertTrue(mult == 18000 || mult == 20000, "up 1.80x, down 2.00x");
+        assertTrue(mult == 17000 || mult == 19000, "up 1.70x, down 1.90x");
     }
 
     function test_DirectionWrongWayPaysNothing() public {

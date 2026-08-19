@@ -36,8 +36,8 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A';
-const REGISTRY = '0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61';
+const GRID_GAME = '0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC';
+const REGISTRY = '0x5156A5BD8F3304eCE58c12F097B98C11600ba2A5';
 
 const GAME_ABI = [
     'function deposit() external payable',
@@ -116,7 +116,7 @@ const DECISION_SECONDS = 45;
  * Mirrors GridGame.DIRECTION_*_MULT. Asymmetric on purpose: the window pool closes up 54.2% of
  * the time, so paying both sides alike would let an always-up bot play at break-even.
  */
-const DIR_MULT = {up: 1.8, down: 2.0};
+const DIR_MULT = {up: 1.7, down: 1.9};
 
 const ANTES = [0.5, 1, 2, 5];
 const STAKES = [0.5, 1, 2, 5];
@@ -726,7 +726,7 @@ function setMode(mode) {
 
     $('oddsNote').innerHTML = mode === 'grid'
         ? 'Multipliers come from the <strong>visible</strong> candles only — the odds cannot leak the hidden path.'
-        : 'Up pays less because the pool drifts up: <strong>54%</strong> of windows close higher. Read the era and the edge is yours.';
+        : 'Up pays less because the pool drifts up: <strong>54%</strong> of windows close higher. Beat 59% on your up calls and the edge is yours.';
 
     document.querySelectorAll('.cell.picked').forEach((el) => el.classList.remove('picked'));
     syncBets();

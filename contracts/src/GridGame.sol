@@ -73,19 +73,19 @@ contract GridGame {
      *
      * The two sides are NOT priced the same, because the window pool is not a fair coin. Measured
      * over all 120 registered windows the final candle closes up 65 times and down 55 — 54.2% up.
-     * Paying both sides 1.85x would hand an "always UP" bot 0.542 * 1.85 = 1.003, a house that
-     * loses money to a script with no knowledge at all. Pricing each side against its own measured
-     * frequency keeps every fixed strategy negative:
+     * Paying both sides alike would hand an "always UP" bot near break-even, a house that loses
+     * to a script with no knowledge at all. Pricing each side against its own measured frequency
+     * keeps every fixed strategy negative, at the same ~10% house edge the grid now carries:
      *
-     *   always UP     0.542 * 1.80 = 0.976     always DOWN  0.458 * 2.00 = 0.916
-     *   coin flip     0.500 * 1.90 = 0.950
+     *   always UP     0.542 * 1.70 = 0.921     always DOWN  0.458 * 1.90 = 0.870
+     *   coin flip     mixes to 0.896
      *
-     * A player who actually reads the era can push toward break-even, which is the point — the
-     * knowledge is meant to be worth something. Re-measure with `pnpm sweep-span` if the pool
-     * changes materially; 120 windows puts roughly +/-9% of confidence on that 54.2%.
+     * Break-even needs 58.8% accuracy on UP calls (52.6% on DOWN) — reachable by actually reading
+     * the era, not by guessing. Re-measure with `pnpm sweep-span` if the pool changes materially;
+     * 120 windows puts roughly +/-9% of confidence on that 54.2%.
      */
-    uint32 public constant DIRECTION_UP_MULT = 18000; // 1.80x
-    uint32 public constant DIRECTION_DOWN_MULT = 20000; // 2.00x
+    uint32 public constant DIRECTION_UP_MULT = 17000; // 1.70x
+    uint32 public constant DIRECTION_DOWN_MULT = 19000; // 1.90x
 
     enum RoundState {
         None,

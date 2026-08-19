@@ -11,8 +11,16 @@ export const VISIBLE_FRAC = 0.2;
 export const GRID_TIME_STEPS = 8;
 export const GRID_PRICE_BANDS = 12;
 
-/** House edge baked into every multiplier. */
-export const HOUSE_EDGE = 0.037;
+/**
+ * House edge baked into every multiplier.
+ *
+ * Was 0.037 (casino-slot territory). Retuned after real play: with per-cell EV at 96.3%, covering
+ * the top five cells of an early column returned something 94% of rounds — the house won on paper
+ * and lost the feel. At 0.11 the designed RTP is 89%, which measures ~90% realised against the
+ * pool (real paths run slightly hotter than the model, same ~1.3pt gap seen at every calibration).
+ * Sessions now bleed visibly; the game stays winnable on a read, not on coverage.
+ */
+export const HOUSE_EDGE = 0.11;
 
 /** Hard cap — the top multiplier dominates bankroll variance. */
 export const MAX_MULTIPLIER = 250;

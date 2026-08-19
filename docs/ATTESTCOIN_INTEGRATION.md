@@ -43,8 +43,8 @@ for live data and not at all for transactions from 2022.
 |---|---|
 | `EvmV1Decoder` (library) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 | `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0xA7d01c898b4Ea2143c4Af3Ec52Bd0C8DBCB1BE61` |
-| `GridGame` | `0x9FBfeB2Fcd11EAd928f036E48807112f9670Fd7A` |
+| `ChartRegistry` | `0x5156A5BD8F3304eCE58c12F097B98C11600ba2A5` |
+| `GridGame` | `0x1BF8d7f54Dda5699dA359B4AECfa6bA7582909cC` |
 
 Precompiles used: BlockProver `0x…0FD2`, ChainInfo `0x…0FD3`. Source chain: Ethereum mainnet,
 **chainKey 3**.
