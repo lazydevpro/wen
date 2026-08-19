@@ -345,18 +345,24 @@ async function checkLegacyCredit() {
 
     $('legacyAmount').textContent = Number(formatEther(total)).toFixed(2);
     $('btnLegacy').onclick = async () => {
-        $('btnLegacy').disabled = true;
+        const btn = $('btnLegacy');
+        btn.disabled = true;
         try {
+            let done = 0;
             for (const f of found) {
-                toast(`confirm recovery of ${Number(formatEther(f.bal)).toFixed(2)} CTC…`);
-                await (await f.g.withdraw(f.bal)).wait();
+                btn.textContent = `confirm in wallet… (${done + 1}/${found.length})`;
+                const tx = await f.g.withdraw(f.bal);
+                btn.textContent = `recovering ${Number(formatEther(f.bal)).toFixed(2)} CTC…`;
+                await tx.wait();
+                done++;
             }
             toast('recovered to your wallet');
             panel.hidden = true;
             await refreshCredit();
         } catch (e) {
             toast(explain(e));
-            $('btnLegacy').disabled = false;
+            btn.textContent = 'recover to wallet';
+            btn.disabled = false;
         }
     };
 }
@@ -386,6 +392,8 @@ async function refreshCredit() {
 function updateWithdraw() {
     const btn = $('btnWithdraw');
     if (!btn) return;
+    // mid-transaction the button narrates the transaction; don't repaint it from elsewhere
+    if (btn.dataset.busy) return;
     const show = state.address && state.credit > 0n && !isRoundLive();
     btn.hidden = !show;
     if (show) btn.textContent = `withdraw ${Number(formatEther(state.credit)).toFixed(2)} CTC`;
@@ -510,14 +518,21 @@ async function claimFaucet() {
 
 async function doWithdraw() {
     if (state.credit === 0n) return;
+    const btn = $('btnWithdraw');
+    btn.dataset.busy = '1';
+    btn.disabled = true;
+    btn.textContent = 'confirm in wallet…';
     try {
-        toast('confirm the withdrawal in your wallet…');
         const tx = await state.game.withdraw(state.credit);
+        btn.textContent = 'withdrawing…';
         await tx.wait();
-        await refreshCredit();
         toast('winnings withdrawn to your wallet');
     } catch (e) {
         toast(explain(e));
+    } finally {
+        delete btn.dataset.busy;
+        btn.disabled = isRoundLive();
+        await refreshCredit();
     }
 }
 
@@ -899,6 +914,9 @@ async function animateReveal() {
 /** Resolution is permissionless — the client does it so the whole loop is visible on-chain. */
 async function resolveOnChain() {
     const h = state.reveal.hidden;
+    const btn = $('btnLockIn');
+    btn.disabled = true;
+    btn.textContent = 'writing the result on-chain…';
     try {
         const tx = await state.game.resolveRound(
             state.roundId,
@@ -928,6 +946,7 @@ function finish(payout) {
     $('resultVerdict').textContent = net > 0 ? 'you read it right' : 'wrong side of history';
     $('resultVerdict').className = 'verdict ' + (net > 0 ? 'won' : 'lost');
     $('resultAmount').textContent = (net >= 0 ? '+' : '') + net.toFixed(2) + ' CTC';
+    $('resultAmount').className = 'amount ' + (net > 0 ? 'up' : net < 0 ? 'down' : '');
     $('resultEra').innerHTML = `This was <strong>${state.reveal.eraLabel}</strong>.<br />${state.win.riddle}`;
 
     if (state.mode === 'simple') {
@@ -1088,7 +1107,7 @@ function renderLeaderboard(justPlayed) {
         .map((e) => {
             const mine = justPlayed && e.at === justPlayed.at;
             return `<li class="${mine ? 'you' : ''}"><span>${e.era.split('—')[0].trim()}</span>` +
-                `<b>${e.net >= 0 ? '+' : ''}${e.net}</b></li>`;
+                `<b class="${e.net < 0 ? 'neg' : ''}">${e.net >= 0 ? '+' : ''}${e.net}</b></li>`;
         })
         .join('');
 }

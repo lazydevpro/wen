@@ -221,14 +221,13 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 .verdict { font-family: var(--display); font-size: 33px; font-weight: 500; margin-bottom: 6px; }
 .verdict.won { color: var(--win); }
-.verdict.lost { color: var(--ink-mute); }
 .amount { font-family: var(--mono); font-size: 44px; font-weight: 600; letter-spacing: -1.5px; }
 .result-era { color: var(--ink-mute); font-size: 12.5px; margin: 14px 0 22px; line-height: 1.65; }
 .breakdown { text-align: left; font-family: var(--mono); font-size: 11px; display: flex;
              flex-direction: column; gap: 6px; margin-bottom: 26px; }
 .breakdown div { display: flex; justify-content: space-between; padding: 7px 11px; background: var(--sunken); border-radius: 7px; }
 .breakdown .w { color: var(--win); }
-.breakdown .l { color: var(--ink-mute); }
+.breakdown .l { color: var(--lose); }
 
 /* ───────────────────────── toast ───────────────────────── */
 .toast {
@@ -330,3 +329,11 @@ button { font-family: var(--sans); cursor: pointer; }
 .dir-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 /* in simple mode the grid is context, not a control surface */
 .grid-overlay.dimmed .cell { opacity: 0.25; pointer-events: none; }
+
+/* ─────────────────── losses are red, everywhere an outcome shows ───────────────────
+   The net amount, breakdown rows and leaderboard all rendered losses in grey or —
+   worse — the leaderboard's win-green. Red is reserved for outcomes; a loss is one. */
+.amount.up { color: var(--win); }
+.amount.down { color: var(--lose); }
+.verdict.lost { color: var(--lose); }
+.lb li b.neg { color: var(--lose); }
