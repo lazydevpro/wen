@@ -1,14 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+interface IChartVerifier {
+    /// @notice sqrtPriceX96 proven through Attestcoin for a (pool, source block); 0 if never proven.
+    function provenPrice(address pool, uint64 blockNumber) external view returns (uint160);
+}
+
 /**
  * @title ChartRegistry
  * @notice Registry of playable Hindsight windows.
  *
- * A window is a slice of real Ethereum history. Its candles are committed as a Merkle root so
- * hidden candles can be revealed one at a time with inclusion proofs — the operator can neither
- * forge a candle (each is Attestcoin-proven upstream in ChartVerifier) nor swap the series
- * mid-round (the root is fixed at registration).
+ * A window is a slice of real Ethereum history, committed as a Merkle root so hidden candles can
+ * be revealed one at a time with inclusion proofs.
+ *
+ * WHY REGISTRATION LOOKS THE WAY IT DOES
+ * An earlier version took `merkleRoot`, `anchorSqrtPriceX96` and the visible series as operator
+ * calldata and validated two array lengths. That made the root a *statement* rather than a fact:
+ * a Merkle proof answers "is this candle inside the set I committed", never "did this happen on
+ * Ethereum", so a wholly invented window — candles at block heights that do not exist — passed
+ * every on-chain check. Attestcoin sat upstream in ChartVerifier and nothing consulted it, which
+ * meant the game's real trust root was the deployer's key.
+ *
+ * So the operator no longer supplies chart data at all. It supplies the candle series, and this
+ * contract:
+ *   1. refuses any candle whose (pool, block, price) was not proven through Attestcoin, and
+ *   2. DERIVES the merkle root, the anchor and the visible series from those proven candles.
+ *
+ * The root is therefore provably a root over real Ethereum swaps, and forging a window stops
+ * being dishonest and starts being impossible. Registration costs more gas; it happens once per
+ * window and the alternative is a claim nobody can check.
  *
  * The multiplier grid is stored here too. It is derived from VISIBLE candles only; because the
  * visible candles are on-chain, anyone can recompute the grid and check that no future data
@@ -39,6 +59,10 @@ contract ChartRegistry {
 
     address public owner;
 
+    /// @notice The Attestcoin verifier every candle must have passed through. Immutable so the
+    ///         provenance check cannot be pointed at a friendlier contract after deployment.
+    IChartVerifier public immutable verifier;
+
     mapping(bytes32 => Window) public windows;
     /** flattened grid multipliers, index = t * priceBands + p */
     mapping(bytes32 => uint32[]) public gridMultipliers;
@@ -54,22 +78,26 @@ contract ChartRegistry {
     error GridSizeMismatch(uint256 expected, uint256 got);
     error VisibleCountMismatch(uint256 expected, uint256 got);
     error BadMerkleProof(uint256 candleIndex);
+    error CandleCountMismatch(uint256 expected, uint256 got);
+    /// @notice This candle was never proven through Attestcoin, or was proven at a different price.
+    error CandleNotProven(uint256 candleIndex, uint64 blockNumber);
+    error NoCandles();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
     }
 
-    constructor() {
+    constructor(IChartVerifier _verifier) {
         owner = msg.sender;
+        verifier = _verifier;
     }
 
     struct RegisterParams {
         bytes32 windowId;
-        bytes32 merkleRoot;
-        uint160 anchorSqrtPriceX96;
+        /** the Uniswap pool these candles were proven from, as allowlisted in ChartVerifier */
+        address pool;
         uint256 bandHeight;
-        uint16 totalCandles;
         uint16 visibleCount;
         uint8 timeSteps;
         uint8 priceBands;
@@ -77,22 +105,37 @@ contract ChartRegistry {
         string eraLabel;
         bytes32 riddleHash;
         uint32[] multipliers;
-        uint160[] visible;
+        /**
+         * The full candle series in index order. `merkleRoot`, `anchorSqrtPriceX96`, `visible`
+         * and `totalCandles` used to be supplied alongside this and are now derived from it —
+         * anything the operator can state independently is something the operator can lie about.
+         */
+        uint64[] blockNumbers;
+        uint160[] sqrtPrices;
     }
 
     function registerWindow(RegisterParams calldata p) external onlyOwner {
         if (windows[p.windowId].exists) revert WindowExists(p.windowId);
 
+        uint256 n = p.blockNumbers.length;
+        if (n == 0) revert NoCandles();
+        if (p.sqrtPrices.length != n) revert CandleCountMismatch(n, p.sqrtPrices.length);
+        if (p.visibleCount == 0 || p.visibleCount > n) revert VisibleCountMismatch(n, p.visibleCount);
+
         uint256 expectedCells = uint256(p.timeSteps) * uint256(p.priceBands);
         if (p.multipliers.length != expectedCells) revert GridSizeMismatch(expectedCells, p.multipliers.length);
-        if (p.visible.length != p.visibleCount) revert VisibleCountMismatch(p.visibleCount, p.visible.length);
+
+        // Provenance and commitment in one pass: reverts unless every candle came through
+        // Attestcoin, and returns the root over exactly those candles.
+        bytes32 root = _provenRoot(p.pool, p.blockNumbers, p.sqrtPrices);
 
         windows[p.windowId] = Window({
             exists: true,
-            merkleRoot: p.merkleRoot,
-            anchorSqrtPriceX96: p.anchorSqrtPriceX96,
+            merkleRoot: root,
+            // the grid is centred on the last visible candle, which is now a proven price
+            anchorSqrtPriceX96: p.sqrtPrices[p.visibleCount - 1],
             bandHeight: p.bandHeight,
-            totalCandles: p.totalCandles,
+            totalCandles: uint16(n),
             visibleCount: p.visibleCount,
             timeSteps: p.timeSteps,
             priceBands: p.priceBands,
@@ -101,10 +144,52 @@ contract ChartRegistry {
             riddleHash: p.riddleHash
         });
         gridMultipliers[p.windowId] = p.multipliers;
-        visibleSqrtPrices[p.windowId] = p.visible;
+        _storeVisible(p.windowId, p.sqrtPrices, p.visibleCount);
         windowIds.push(p.windowId);
 
-        emit WindowRegistered(p.windowId, p.eraLabel, p.merkleRoot, p.totalCandles);
+        emit WindowRegistered(p.windowId, p.eraLabel, root, uint16(n));
+    }
+
+    /**
+     * @notice Checks every candle against ChartVerifier and returns the Merkle root over them.
+     * @dev Sorted-pair hashing with the odd node PROMOTED rather than duplicated. This must match
+     *      buildMerkle() in worker/src/lib/window.ts exactly — the off-chain builder generates the
+     *      inclusion proofs that verifyCandle() later checks, so any divergence would make every
+     *      hidden candle unrevealable.
+     */
+    function _provenRoot(address pool, uint64[] calldata blocks, uint160[] calldata prices)
+        private
+        view
+        returns (bytes32)
+    {
+        uint256 n = blocks.length;
+        bytes32[] memory layer = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) {
+            // The price is part of the check, not just the block: proving *a* swap in this block
+            // must not license committing a different price for it.
+            if (verifier.provenPrice(pool, blocks[i]) != prices[i]) revert CandleNotProven(i, blocks[i]);
+            layer[i] = candleLeaf(i, blocks[i], prices[i]);
+        }
+        while (n > 1) {
+            uint256 m = 0;
+            for (uint256 i = 0; i < n; i += 2) {
+                layer[m++] = i + 1 < n ? _hashPair(layer[i], layer[i + 1]) : layer[i];
+            }
+            n = m;
+        }
+        return layer[0];
+    }
+
+    function _hashPair(bytes32 a, bytes32 b) private pure returns (bytes32) {
+        return a <= b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
+    }
+
+    /// @dev Extracted so registerWindow stays under the stack limit.
+    function _storeVisible(bytes32 windowId, uint160[] calldata prices, uint16 count) private {
+        uint160[] storage v = visibleSqrtPrices[windowId];
+        for (uint256 i = 0; i < count; i++) {
+            v.push(prices[i]);
+        }
     }
 
     // --------------------------------------------------------------- views

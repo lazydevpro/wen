@@ -15,6 +15,29 @@ const WINDOW_DIR = new URL('../../web/data/w/', import.meta.url).pathname;
 const REVEAL_DIR = new URL('../data/reveals/', import.meta.url).pathname;
 const ANTE = parseEther('1');
 
+/** windowOf() reverts until the block after the deal is strictly in the past — the draw derives
+ *  from that block's hash, which is exactly why a dealing transaction cannot peek at it. */
+async function awaitWindow(game: any, roundId: bigint, timeoutMs = 90_000): Promise<string> {
+    const started = Date.now();
+    for (;;) {
+        try {
+            return await game.windowOf(roundId);
+        } catch (e) {
+            if (Date.now() - started > timeoutMs) throw new Error('draw did not settle in time');
+            await new Promise((r) => setTimeout(r, 2000));
+        }
+    }
+}
+
+/** Resolution must land strictly after the settling block, so one transaction can never deal,
+ *  bet and collect. Wait for the chain to move on before revealing. */
+async function nextBlock(provider: any, after: number) {
+    for (;;) {
+        if ((await provider.getBlockNumber()) > after) return;
+        await new Promise((r) => setTimeout(r, 2000));
+    }
+}
+
 async function main() {
     const betWrong = process.argv[2] === 'wrong';
     const provider = cc3Provider();
@@ -35,7 +58,7 @@ async function main() {
         .map((l: any) => { try { return game.interface.parseLog(l); } catch { return null; } })
         .find((p: any) => p && p.name === 'RoundDealt');
     const roundId: bigint = dealt.args.roundId;
-    const windowId: string = dealt.args.windowId;
+    const windowId: string = await awaitWindow(game, roundId);
     const key = windowId.toLowerCase();
     const win = JSON.parse(readFileSync(`${WINDOW_DIR}${key}.json`, 'utf8'));
     console.log(`    round ${roundId} — "${win.riddle}"`);
@@ -53,6 +76,7 @@ async function main() {
     console.log(`\n[3] resolveRound — the contract works the direction out from the proven candles`);
     const h = reveal.hidden;
     const before: bigint = await game.balances(wallet.address);
+    await nextBlock(provider, await provider.getBlockNumber());
     await (
         await game.resolveRound(
             roundId,

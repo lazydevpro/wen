@@ -9,10 +9,10 @@ Legend: `- [ ]` open · `- [~]` in progress · `- [x]` done
 
 ## Done — thesis validated end to end
 
-- [x] **CC3 Testnet CTC** — ✅ funded 10,000 CTC at `0xdb79Bf82610f12E549d1320a6FdC0dc3Be2c3CcE` (~50M historical proofs' worth)
+- [x] **CC3 Testnet CTC** — ✅ funded 10,000 CTC at `0xdb79Bf82610f12E549d1320a6FdC0dc3Be2c3CcE` (the "~50M proofs' worth" once noted here divides the grant by a modelled per-proof cost, not a measured one)
 - [x] **Spike: prove HISTORY** — ✅ 5 eras from Oct 2021 → Mar 2024 all verified, prices historically accurate #spike
 - [x] **Spike: prove one real historical Uniswap V3 `Swap`** — ✅ PASSED. Verified on CC3 Testnet, tampering rejected #spike
-- [x] **Spike: batch path** — ✅ PASSED. 10 proofs / 1 shared continuity proof, 10× cheaper #spike
+- [x] **Spike: batch path** — ✅ PASSED. 10 proofs verified against 1 shared continuity proof (the "10× cheaper" once noted here was model arithmetic, not a billing result) #spike
 - [x] **Archive-capable Ethereum RPC** — ✅ configured. Free tier caps `getLogs` at a **10-block range**, so the indexer must chunk #blocker
 - [ ] Attend the AMA (2026-08-18, 8pm KST) — ask about attestor set size, readability audit status, additional source chains #research
 - [x] Scaffold Foundry project + worker, install `@gluwa/usc-sdk` 0.18.0, pull `USCBase.sol` + `VerifierInterface.sol` #setup

@@ -2,7 +2,7 @@
 
 **Bet on what already happened.**
 
-You ante up and are dealt a random slice of Ethereum's real price history — but not told when it
+You put up a stake and get a random slice of Ethereum's real price history — but not told when it
 is. A riddle is your only clue. Work out where you are, then bet on where the chart goes next.
 You get 45 seconds.
 
@@ -21,21 +21,36 @@ Attestcoin Protocol. Nothing is simulated.
 If the chart could be fabricated, *"which era is this?"* would have no answer. The riddle only
 means something because the candles genuinely came from that moment in Ethereum's history.
 
+**That is enforced, not asserted.** `ChartRegistry.registerWindow` rejects any candle whose
+`(pool, block, price)` was not proven through Attestcoin, and derives the Merkle root, the anchor
+and the visible series from those proven candles rather than accepting them as calldata. A window
+of invented history does not register — `CandleNotProven`. All **4,706 candles** across all 120
+windows are on-chain in `ChartVerifier`; check any of them yourself:
+
+```bash
+cast call 0xE64f8b159FC22F9B0B1ca4980362eB5765cAb0f3 "candleCount(address)(uint256)" 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640 --rpc-url https://rpc.cc3-testnet.creditcoin.network
+```
+
+An earlier version of this README made the same claim while nothing checked it: the proving script
+wrote to a journal no other code read, and the game trusted a root the operator typed in. The
+sentence was true of the data and false of the system. It is now true of both.
+
 That makes Attestcoin load-bearing rather than decorative — and it needs **Creditcoin
 specifically**, because wen's core axis is depth into the past:
 
 - **No lookback limit.** The pool reaches back to May 2021, over five years, and proving a swap
   from then costs the same as proving one from last week.
-- **Flare's FDC, the closest comparable attestation layer, has a hard 14-day request window.**
-  This game cannot be built there.
+- **Flare's FDC, the closest comparable attestation layer, caps how old the underlying data may
+  be** — 14 days for most chain-data attestation types, the class an Ethereum transaction falls
+  into. Every era this game deals sits outside that window.
 
 ## Deployed (CC3 Testnet, chainId 102031)
 
 | Contract | Address |
 |---|---|
-| `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0x8965D4425622e4cd44A590c8985dD35b0daC2797` |
-| `GridGame` | `0x6DA7B83B5069b2213F9f1233EB545b794801383E` |
+| `ChartVerifier` | `0xE64f8b159FC22F9B0B1ca4980362eB5765cAb0f3` |
+| `ChartRegistry` | `0xBCf9D65e6eb421B6dbf2CaEDbB21bCcBD0337dC5` |
+| `GridGame` | `0x5D2b31f37342d6a842742628e49b70f0f3507b96` |
 | `EvmV1Decoder` (lib) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
 
 **120 windows registered**, sliced from 21 hand-written eras spanning May 2021 to November 2024 —
@@ -67,10 +82,12 @@ Full detail: **[docs/ATTESTCOIN_INTEGRATION.md](docs/ATTESTCOIN_INTEGRATION.md)*
 ## The game
 
 ```
-connect wallet → pick an ante → DEAL          (no deposit step — see below)
-   └─ startRound() lands on-chain, assigning a RANDOM window
-      └─ only now is the chart drawn — 45s on the clock
-         └─ place bets → settleRound() → resolveRound() → reveal
+connect wallet → pick a stake → PLAY          (no deposit step — see below)
+   └─ startRound() commits the stake — the chart is NOT chosen yet
+      └─ the hash of THAT block picks it. Unknowable while startRound runs, but sitting in the
+         receipt the moment it confirms, so the client derives it with no extra wait — one block,
+         ~7.5s, and the chart is up with 45s on the clock
+         └─ place bets → settleRound() → (next block) → resolveRound() → reveal
 ```
 
 - **Every riddle opens with the brand's own question** — *"wen something that promised to always
@@ -85,20 +102,28 @@ connect wallet → pick an ante → DEAL          (no deposit step — see below
   they simply aren't bettable. Starting the grid pinned to the anchor made the first column so
   concentrated that a couple of cells carried nearly all the probability.
 - **A grid of 8 × 12 (time × price) cells** sits over the future, each printed with its multiplier.
-- **Multipliers are authored, not derived** — see below. They depend only on a cell's position, never on the hidden path.
+- **Multipliers are priced from measured history** — see below. They depend only on a cell's position, never on the hidden path.
 - The chart plays forward; cells the real price path crosses pay out.
 
 **Or play it simple.** After the deal you can switch to a two-button game: does the chart end
 higher or lower than the last known price? Less to think about, less to win. The two sides are
 priced differently — **up 1.70×, down 1.90×** — because the pool is not a fair coin: measured over
-all 120 windows the final candle closes up 54.2% of the time. Paying both sides alike would let an
-"always up" bot milk the house, so each side is priced against its own measured frequency:
+all 120 windows, with the two-step runway in place, the final candle closes up **53.3%** of the
+time. Paying both sides alike would let an "always up" bot ride that skew, so the likelier side
+pays less:
 
 | strategy | win rate | EV per 1 CTC |
 |---|---|---|
-| always up | 54.2% | 0.921 |
-| always down | 45.8% | 0.870 |
-| coin flip | 50% | 0.896 |
+| always up | 53.3% | 0.907 |
+| always down | 46.7% | 0.887 |
+| coin flip | 50% | 0.897 |
+
+Neither side is positive EV, which is the property that matters. They are not *equal* either —
+betting up is worth about two points more than betting down — and simple mode as a whole returns
+more than the grid's 82%. That is deliberate: it is the lower-variance, lower-ceiling game.
+
+The runway matters to this number and is easy to forget: the same measurement without it reads
+54.2%, which is what an earlier draft of this table quoted after `GRID_LEAD_STEPS` went 0 → 2.
 
 A player who actually recognises the era can push toward break-even, which is the point — knowing
 the history is meant to be worth something. Both modes share the same deal, clock and forfeit; only
@@ -124,6 +149,26 @@ the candle series against public price history, and walks away for free — the 
 design exists to price. The ante is not a fee: it counts toward your stake, so an honest player
 pays nothing extra. Deal and walk away and it is forfeit.
 
+**Confirming was not enough on its own.** `startRound` used to pick the window immediately and
+return it, so a *contract* could deal, read what it drew, and revert the whole transaction if it
+did not like it — reverse-searching an unlimited number of windows for nothing, because a revert
+unwinds the ante too. The window is now drawn from the hash of the block *after* the deal, which
+does not exist while `startRound` is executing. There is nothing to read and nothing to revert
+away from. Costs one extra block (~15s) before the chart appears.
+
+Two more guards came from the same audit:
+
+- **Resolution must land in a later block than the bets.** Otherwise one transaction could deal,
+  bet and collect — worth 4.62 CTC on a 1 CTC bet when it was possible.
+- **Open rounds are capped in aggregate,** not just individually. `EXPOSURE_DIVISOR` bounds a
+  single round; it says nothing about eighty at once. Opening 80 and only then resolving them
+  drained 93.7% of the bankroll through a breaker set at 30%, because the breaker only gated
+  `startRound`. `outstandingExposure` now sums every settled-but-unresolved round against
+  `bankroll / 4`.
+
+Regression tests: `test_ContractCannotPeekAtWindowInDealTransaction`,
+`test_CannotResolveInTheSettlingBlock`, `test_TotalExposureIsBoundedAcrossOpenRounds`.
+
 What is **not** required is a deposit. `startRound` and `settleRound` are payable: whatever the
 table credit doesn't cover rides along as `msg.value` on a transaction the player signs anyway,
 so a fresh faucet wallet plays in one popup. Excess value stays as withdrawable credit, winnings
@@ -140,44 +185,51 @@ The per-round exposure cap (bankroll ÷ 20) applies to the **worst case where ev
 A 250× cell can therefore only carry `cap / 250` CTC — which can be *less than the ante*, forcing
 bets to be spread rather than concentrated. The UI surfaces this before you can hit the revert.
 
-## Multipliers are authored, not derived
+## Multipliers are priced from measured history
 
-Every version before this priced a cell at its *fair odds* — `(1 − edge) / probability` — so
-every cell carried identical expected value. That is a convention, not a law, and it has a hard
-consequence: with twelve bands the likeliest cell sits near 20%, so its fair price is ~4×. No
-edge setting brings that to 1× without paying pennies on a fair bet.
-
-Roulette doesn't work that way. A straight-up number pays 35:1 flat; some bets are simply worse
-value than others, and the edge falls out in aggregate. So the prices here are **chosen round
-numbers by distance from the anchor row**, and the *edge* is what gets solved for:
+Each cell pays `0.86 / (its measured hit rate)`. That makes **86% the ceiling for every cell by
+construction** — no cell, no distance from the anchor, and no column can be positive-EV, because
+none of them is priced above fair. Overall return lands at **82%**, an 18% house edge.
 
 | distance from anchor | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|---|
-| ratio | **1×** | 4× | 10× | 25× | 60× | 150× |
+| hit rate | 21% | 10.2% | 5.3% | 4.8% | 1.9% | 1.1% |
+| pays (column 0) | 3× | 7.1× | 25.5× | 50.3× | 66.6× | 98.3× |
 
-Bet the row the price is already on and you get your stake back. Bet the far edge and it pays big.
+Rates come from replaying all 120 windows. Thin cells — d4 and d5 carry under 7% of outcomes
+between them — get a small add-0.1 prior, so a cell with two observed hits is priced *down* rather
+than exploding to a four-figure multiplier off a sample that cannot support one.
 
-**The scale is solved per column, and it has to be.** A single flat ladder made the late columns
-positive-EV — 107%, 111%, 137% — so betting only columns 5–7 beat the house outright. Later
-columns pay *less* for distance, because the price has had time to travel there.
+**The previous ladder was exploitable, and the way I missed it is the useful part.** Prices were
+authored — round numbers by distance, `1× 4× 10× 25× 60× 150×`, with a scale solved per column so
+that every column returned exactly 86.0%. That check passed, and I reported the grid as flat on
+the strength of it. But a column is not the only axis. Measured per *distance* instead:
 
-**Calibrate on history, not on the model.** Solving the scale against the random-walk model
-looked right and wasn't: real paths trend, so they travel further than a random walk expects, and
-most so in the opening columns. Priced on the model, columns 0 and 1 measured **123%** and
-**110%** against real history. Priced on the history itself, every one of the eight columns lands
-on **86.0%** — a 14% house edge with no exploitable column anywhere.
+| distance | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| RTP | 21% | 46% | 55% | **128%** | **117%** | **149%** |
+
+A player betting only the outer bands returned ~131%. The 86% figure was a true average
+concealing the axis that mattered — the same error as quoting a cost model as a measurement.
+
+The root cause is that real price paths trend, so distance-3 is nearly as likely as distance-2
+(4.8% vs 5.3%) while the authored ladder paid 2.5× more for it. Authoring the numbers meant
+guessing a fall-off that reality does not have.
+
+**Cost of the fix:** the anchor rows now pay 3–5.3× rather than 1×. A 1× cell is ~21% RTP, and
+recovering that lost return anywhere else is exactly what pushed the outer cells past fair. You
+can have a 1× cell or an 86% ceiling, not both.
 
 Regenerate with `pnpm --dir worker calibrate-ladder` whenever the pool changes.
 
-### The three calibrations before this
+### The calibrations before this
 
-Each was measured against real outcomes, and each was wrong in a way the previous couldn't have
+Each was measured against real outcomes, and each was wrong in a way the previous could not have
 predicted. **±3σ** left the outer bands unreachable — players bought cells that could not win, at
-a **56%** realised edge. **2.55σ**, fitted to the six windows that then existed, never
-generalised: 87% RTP against 120 windows, a 13% edge where 3.7% was intended. **3.4σ at an 11%
-design edge** landed 90.3% realised — correct on paper, but the likeliest cell paid 3–4×, so one
-lucky cell covered four wrong ones and hitting anything felt like winning. That last failure is
-what the authored ladder fixes.
+a **56%** realised edge. **2.55σ**, fitted to the six windows that then existed, never generalised:
+87% RTP against 120 windows. **3.4σ at an 11% design edge** landed 90.3% realised, but the
+likeliest cell paid 3–4×, so one lucky cell covered four wrong ones. The **authored ladder** fixed
+that and introduced the positive-EV outer bands described above.
 
 ## Repo
 

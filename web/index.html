@@ -43,7 +43,7 @@
     <h1 class="wen-word" aria-label="wen is this chart from?">wen</h1>
     <p class="wen-cycle" aria-hidden="true"><span id="wenCycle">moon?</span><span class="caret"></span></p>
     <p class="sub">
-      You're dealt a real slice of Ethereum's past — never told <em>wen</em>.
+      You get a real slice of Ethereum's past — never told <em>wen</em>.
       One riddle, 45 seconds, then call what came next.
     </p>
     <button id="btnConnectBig" class="primary">connect wallet to play</button>
@@ -79,17 +79,17 @@
     </div>
 
     <div class="panel ante-panel">
-      <div class="panel-head"><span class="tag">ante up</span></div>
+      <div class="panel-head"><span class="tag">your opening stake</span></div>
       <p class="muted">
-        Your ante is your <strong>minimum stake</strong>, not a fee — it counts toward your bets.
-        It's paid straight from your wallet as you deal. Winnings collect as credit and draw
+        Your opening stake is a <strong>minimum</strong>, not a fee — it counts toward your bets.
+        It's paid straight from your wallet when you start. Winnings collect as credit and draw
         down first on later hands; withdraw them any time from the top bar.
       </p>
       <div class="ante-grid" id="anteGrid"></div>
-      <button id="btnDeal" class="primary wide" disabled>deal me a chart</button>
+      <button id="btnDeal" class="primary wide" disabled>show me a chart</button>
       <p class="fineprint">
-        Once dealt you have <strong id="decisionHint">45 seconds</strong> to place your bets.
-        Walk away and the ante is forfeit — that is what stops anyone looking the chart up.
+        Once the chart appears you have <strong id="decisionHint">45 seconds</strong> to place your bets.
+        Walk away and it is forfeit — that is what stops anyone looking the chart up.
       </p>
     </div>
   </div>
@@ -167,7 +167,7 @@
           <span id="anchorPrice">$0</span>
         </div>
         <div class="running-wrap">
-          <label>this hand</label>
+          <label>this round</label>
           <div id="runningTotal" class="running">0.00</div>
         </div>
       </div>
@@ -188,10 +188,10 @@
     <p id="resultEra" class="result-era"></p>
     <div id="resultBreakdown" class="breakdown"></div>
     <div class="result-actions">
-      <button id="btnAgain" class="primary">deal another</button>
+      <button id="btnAgain" class="primary">play again</button>
     </div>
     <div class="lb">
-      <div class="tag">best hands</div>
+      <div class="tag">best rounds</div>
       <ol id="leaderboard"></ol>
     </div>
   </div>
@@ -203,7 +203,7 @@
 <dialog id="txDialog" closedby="none">
   <div class="tx-cells" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   <p id="txStatus">…</p>
-  <div id="txActions" hidden><button id="btnTxBail" class="ghost">back to the table</button></div>
+  <div id="txActions" hidden><button id="btnTxBail" class="ghost">back to the game</button></div>
 </dialog>
 
 <!-- The riddle deserves an entrance: full-screen, typed out, then it glides to its panel slot. -->

@@ -47,6 +47,13 @@ contract GridGame {
      * ante actually sit on a long-shot cell.
      */
     uint256 public constant EXPOSURE_DIVISOR = 20;
+    /**
+     * @dev Every UNRESOLVED round's worst case, summed, may not exceed bankroll/TOTAL_EXPOSURE_DIVISOR.
+     *      EXPOSURE_DIVISOR alone bounds one round; it says nothing about eighty at once. Opening
+     *      80 rounds and only then resolving them drained 93.7% of the bankroll straight through a
+     *      breaker set at 30%, because the breaker only ever gated startRound.
+     */
+    uint256 public constant TOTAL_EXPOSURE_DIVISOR = 4;
 
     /**
      * @dev How long the player has to settle, in blocks, counted from startRound.
@@ -116,9 +123,12 @@ contract GridGame {
         bytes32 windowId;
         RoundState state;
         uint64 startBlock;
-        uint64 settledAt;
+        /** block the bets landed in — resolution must come strictly after it */
+        uint64 settledBlock;
         uint128 ante;
         uint128 staked;
+        /** worst case this round can pay; held in outstandingExposure until it resolves */
+        uint128 maxPayout;
         uint128 paidOut;
     }
 
@@ -127,6 +137,8 @@ contract GridGame {
 
     uint256 public bankroll;
     uint256 public bankrollPeak;
+    /** sum of maxPayout across settled-but-unresolved rounds */
+    uint256 public outstandingExposure;
     bool public paused;
 
     /// @notice Player credit. Deposit once, play many rounds without moving value each time.
@@ -147,7 +159,7 @@ contract GridGame {
     event Deposited(address indexed player, uint256 amount, uint256 balance);
     event Withdrawn(address indexed player, uint256 amount, uint256 balance);
     event BankrollFunded(address indexed from, uint256 amount, uint256 total);
-    event RoundDealt(uint256 indexed roundId, address indexed player, bytes32 indexed windowId, uint128 ante, uint64 deadlineBlock);
+    event RoundDealt(uint256 indexed roundId, address indexed player, uint128 ante, uint64 deadlineBlock, uint64 revealBlock);
     event RoundSettled(uint256 indexed roundId, address indexed player, uint256 staked, uint256 maxPayout);
     event DirectionSettled(uint256 indexed roundId, address indexed player, bool up, uint256 staked, uint256 maxPayout);
     event RoundResolved(uint256 indexed roundId, address indexed player, uint256 payout);
@@ -157,6 +169,11 @@ contract GridGame {
 
     error NotOwner();
     error GamePaused();
+    error UnknownRound(uint256 roundId);
+    error WindowNotYetKnown(uint256 revealBlock, uint256 currentBlock);
+    error WindowExpired(uint256 revealBlock);
+    error TooSoonToResolve(uint64 settledBlock, uint256 currentBlock);
+    error TotalExposureTooHigh(uint256 requested, uint256 cap);
     error NoWindows();
     error NoBets();
     error InsufficientBalance(uint256 needed, uint256 have);
@@ -247,7 +264,7 @@ contract GridGame {
      *      player receives, but every window carries the same house edge, so there is nothing to
      *      gain. This is deliberately NOT used for anything that decides a payout.
      */
-    function startRound(uint128 ante) external payable returns (uint256 roundId, bytes32 windowId) {
+    function startRound(uint128 ante) external payable returns (uint256 roundId) {
         _creditValue();
         if (paused) revert GamePaused();
         if (ante == 0) revert AnteTooSmall();
@@ -262,8 +279,10 @@ contract GridGame {
         if (n == 0) revert NoWindows();
 
         roundId = nextRoundId++;
-        uint256 seed = uint256(keccak256(abi.encodePacked(blockhash(block.number - 1), msg.sender, roundId)));
-        windowId = registry.windowIds(seed % n);
+        // The window is NOT chosen here. It is derived from the hash of the NEXT block, which does
+        // not exist yet, so this transaction cannot learn which window it drew. That is what makes
+        // the ante real: a contract used to call startRound, inspect the returned windowId and
+        // revert the whole transaction if it did not like it, paying nothing to look.
 
         balances[msg.sender] = bal - ante;
         bankroll += ante;
@@ -271,16 +290,46 @@ contract GridGame {
 
         rounds[roundId] = Round({
             player: msg.sender,
-            windowId: windowId,
+            windowId: bytes32(0),
             state: RoundState.Dealt,
             startBlock: uint64(block.number),
-            settledAt: 0,
+            settledBlock: 0,
             ante: ante,
             staked: ante,
+            maxPayout: 0,
             paidOut: 0
         });
 
-        emit RoundDealt(roundId, msg.sender, windowId, ante, uint64(block.number + DECISION_BLOCKS));
+        emit RoundDealt(roundId, msg.sender, ante, uint64(block.number + DECISION_BLOCKS), uint64(block.number));
+    }
+
+    /**
+     * @notice The window a round drew. Unknowable until the block after the deal is mined.
+     * @dev blockhash only reaches back 256 blocks; DECISION_BLOCKS is 20, so a round that can
+     *      still be settled can always be read. Past the deadline the ante is forfeit anyway.
+     */
+    function windowOf(uint256 roundId) public view returns (bytes32) {
+        Round storage r = rounds[roundId];
+        if (r.player == address(0)) revert UnknownRound(roundId);
+        if (r.windowId != bytes32(0)) return r.windowId; // fixed at settle
+        // The DEAL block's own hash. A block cannot know its own hash, so this is still
+        // unreadable while startRound executes — nothing to peek at, nothing to revert away from.
+        // But it lands one block sooner than startBlock+1 did, and the client can derive it
+        // straight from the deal receipt without waiting for a contract call at all.
+        uint256 revealBlock = uint256(r.startBlock);
+        if (block.number <= revealBlock) revert WindowNotYetKnown(revealBlock, block.number);
+        bytes32 bh = blockhash(revealBlock);
+        if (bh == bytes32(0)) revert WindowExpired(revealBlock);
+        uint256 n = registry.windowCount();
+        return registry.windowIds(uint256(keccak256(abi.encodePacked(bh, r.player, roundId))) % n);
+    }
+
+    /// @dev Reserve a round's worst case against the pool-wide ceiling.
+    function _reserveExposure(uint256 maxPayout) private {
+        uint256 total = outstandingExposure + maxPayout;
+        uint256 totalCap = bankroll / TOTAL_EXPOSURE_DIVISOR;
+        if (total > totalCap) revert TotalExposureTooHigh(total, totalCap);
+        outstandingExposure = total;
     }
 
     /// @notice Block after which a dealt round can no longer be settled.
@@ -306,7 +355,13 @@ contract GridGame {
         if (block.number > deadlineOf(roundId)) revert DecisionWindowClosed(uint64(deadlineOf(roundId)), block.number);
         if (ts.length == 0 || ts.length != ps.length || ts.length != amounts.length) revert NoBets();
 
-        (uint256 totalStake, uint256 maxPayout) = _priceBets(r.windowId, ts, ps, amounts);
+        // One block must separate the deal from the bets, which is also when the window becomes
+        // knowable. Without it a contract can deal, look, bet and resolve inside one transaction
+        // and the decision clock means nothing.
+        bytes32 wid = windowOf(roundId);
+        r.windowId = wid;
+
+        (uint256 totalStake, uint256 maxPayout) = _priceBets(wid, ts, ps, amounts);
         if (totalStake < r.ante) revert StakeBelowAnte(totalStake, r.ante);
 
         // the ante is already held; take only the difference
@@ -321,13 +376,15 @@ contract GridGame {
 
         uint256 cap = maxRoundExposure();
         if (maxPayout > cap) revert ExposureTooHigh(maxPayout, cap);
+        _reserveExposure(maxPayout);
 
         for (uint256 i = 0; i < ts.length; i++) {
             betsOf[roundId].push(Bet({t: ts[i], p: ps[i], amount: amounts[i]}));
         }
 
         r.staked = uint128(totalStake);
-        r.settledAt = uint64(block.timestamp);
+        r.maxPayout = uint128(maxPayout);
+        r.settledBlock = uint64(block.number);
         r.state = RoundState.Settled;
 
         emit RoundSettled(roundId, msg.sender, totalStake, maxPayout);
@@ -347,6 +404,12 @@ contract GridGame {
         if (msg.sender != r.player) revert NotPlayer();
         if (block.number > deadlineOf(roundId)) revert DecisionWindowClosed(uint64(deadlineOf(roundId)), block.number);
 
+        // One block must separate the deal from the bets, which is also when the window becomes
+        // knowable. Without it a contract can deal, look, bet and resolve inside one transaction
+        // and the decision clock means nothing.
+        bytes32 wid = windowOf(roundId);
+        r.windowId = wid;
+
         uint256 limit = maxBet();
         if (stake == 0 || stake > limit) revert BetTooLarge(stake, limit);
         if (stake < r.ante) revert StakeBelowAnte(stake, r.ante);
@@ -354,6 +417,7 @@ contract GridGame {
         uint256 maxPayout = (uint256(stake) * uint256(up ? DIRECTION_UP_MULT : DIRECTION_DOWN_MULT)) / MULT_SCALE;
         uint256 cap = maxRoundExposure();
         if (maxPayout > cap) revert ExposureTooHigh(maxPayout, cap);
+        _reserveExposure(maxPayout);
 
         // the ante is already held; take only the difference
         uint256 extra = uint256(stake) - uint256(r.ante);
@@ -367,7 +431,8 @@ contract GridGame {
 
         directionBets[roundId] = DirectionBet({active: true, up: up});
         r.staked = stake;
-        r.settledAt = uint64(block.timestamp);
+        r.maxPayout = uint128(maxPayout);
+        r.settledBlock = uint64(block.number);
         r.state = RoundState.Settled;
 
         emit DirectionSettled(roundId, msg.sender, up, stake, maxPayout);
@@ -443,6 +508,8 @@ contract GridGame {
     ) external {
         Round storage r = rounds[roundId];
         if (r.state != RoundState.Settled) revert WrongRoundState(roundId);
+        // Resolution in the settling block would let one transaction deal, bet and collect.
+        if (block.number <= r.settledBlock) revert TooSoonToResolve(r.settledBlock, block.number);
 
         (uint8 timeSteps,) = registry.gridDims(r.windowId);
         if (
@@ -470,6 +537,8 @@ contract GridGame {
 
         r.state = RoundState.Resolved;
         r.paidOut = uint128(payout);
+        // release the reservation now the round can never pay again
+        outstandingExposure -= r.maxPayout;
 
         if (payout > 0) {
             if (payout > bankroll) revert InsufficientBankroll(payout, bankroll);

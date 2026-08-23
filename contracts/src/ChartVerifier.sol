@@ -61,6 +61,18 @@ contract ChartVerifier is USCBase {
     /// @notice Candle ids per pool, in the order they were verified.
     mapping(address => bytes32[]) public candlesByPool;
 
+    /// @notice The Attestcoin-proven price for a (pool, source block).
+    ///
+    ///         `candles` above is keyed by queryId, which is a hash *of the proof* — a consumer
+    ///         holding only a pool and a block number cannot reconstruct it, so that mapping is
+    ///         unqueryable in practice. This is the index ChartRegistry uses to refuse a window
+    ///         whose candles were never proven.
+    ///
+    ///         Zero means "never proven": a live V3 pool can never quote a zero sqrt price, so
+    ///         the sentinel is unambiguous. First write wins, so a later proof for the same block
+    ///         cannot silently restate a price the registry may already have accepted.
+    mapping(address => mapping(uint64 => uint160)) public provenPrice;
+
     event PoolRegistered(address indexed pool, string label, uint8 token0Decimals, uint8 token1Decimals, bool invert);
     event PoolDisabled(address indexed pool);
     event CandleVerified(
@@ -189,6 +201,7 @@ contract ChartVerifier is USCBase {
 
         candles[queryId] = Candle({sourceBlock: blockHeight, sqrtPriceX96: sqrtPriceX96, pool: pool});
         candlesByPool[pool].push(queryId);
+        if (provenPrice[pool][blockHeight] == 0) provenPrice[pool][blockHeight] = sqrtPriceX96;
 
         emit CandleVerified(pool, blockHeight, sqrtPriceX96, queryId);
     }

@@ -47,7 +47,9 @@ for (const f of files) {
     writeFileSync(
         `${PUBLIC_DIR}${windowId}.json`,
         JSON.stringify({
-            id: w.id,
+            // `id` is deliberately absent. It used to ship here and it is the era slug —
+            // "anticipation-2023-s0" answers the only question the game asks, in the Network tab,
+            // before a single bet is placed. The client never read it.
             windowId,
             riddle: w.era.riddle,
             poolLabel: w.pool.label,
@@ -57,7 +59,10 @@ for (const f of files) {
             timeSteps: GRID_TIME_STEPS,
             leadSteps: GRID_LEAD_STEPS,
             priceBands: w.grid.reduce((m: number, c: any) => Math.max(m, c.p + 1), 0),
-            visible: visible.map((c: any) => ({b: c.blockNumber, o: c.open, h: c.high, l: c.low, c: c.close})),
+            // Block numbers are omitted for the same reason: an Ethereum block number is a
+            // timestamp, so shipping them dates the chart exactly. The chart is drawn from OHLC
+            // alone, and resolveRound takes its block numbers from the gated reveal instead.
+            visible: visible.map((c: any) => ({o: c.open, h: c.high, l: c.low, c: c.close})),
             grid: w.grid.map((c: any) => ({t: c.t, p: c.p, m: c.multiplier})),
         }),
     );

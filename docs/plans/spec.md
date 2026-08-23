@@ -43,9 +43,12 @@ working. Every candle must trace to a real, proven on-chain swap.
 That is not a trust nicety bolted onto a price feed. It is what makes the question answerable.
 
 Supporting facts:
-- **Only Creditcoin can reach back this far.** Flare's FDC has a hard 14-day request window;
-  historical attestation is architecturally excluded for them.
-- **Cost is flat under 90 days and trivial beyond** (~2×10⁻⁴ CTC), with **no lookback limit**.
+- **Only Creditcoin can reach back this far.** Flare's FDC caps the maximum age of the underlying
+  data at 14 days for most chain-data attestation types — the class an Ethereum transaction falls
+  into — so historical attestation is excluded there for this use case.
+- **Cost tracks continuity-root count, not age**, and stays small (~2×10⁻⁴ CTC at the largest root
+  count we measured), with **no lookback limit**. The CTC figures come from a linear model rather
+  than observed billing — see the caveat in [ATTESTCOIN_INTEGRATION.md](../ATTESTCOIN_INTEGRATION.md).
 - **Latency is irrelevant** — we prove transactions from years ago, attested long since. wen is
   the rare design where Attestcoin's ~7-minute lag costs nothing.
 

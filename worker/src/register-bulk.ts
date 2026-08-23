@@ -88,10 +88,8 @@ async function main() {
             const tx = await registry.registerWindow(
                 {
                     windowId: p.windowId,
-                    merkleRoot: p.merkleRoot,
-                    anchorSqrtPriceX96: BigInt(p.anchorSqrtPriceX96),
+                    pool: p.pool,
                     bandHeight: BigInt(p.bandHeightScaled),
-                    totalCandles: p.totalCandles,
                     visibleCount: p.visibleCount,
                     timeSteps: p.timeSteps,
                     priceBands: p.priceBands,
@@ -99,7 +97,10 @@ async function main() {
                     eraLabel: p.eraLabel,
                     riddleHash: p.riddleHash,
                     multipliers: p.multipliers,
-                    visible: p.visibleSqrtPrices.map((s) => BigInt(s)),
+                    // The registry derives merkleRoot, the anchor and the visible series from
+                    // these, and reverts on any candle ChartVerifier has not proven.
+                    blockNumbers: p.blockNumbers,
+                    sqrtPrices: p.sqrtPrices.map((s) => BigInt(s)),
                 },
                 {nonce: nonce++},
             );

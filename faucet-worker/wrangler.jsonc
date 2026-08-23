@@ -39,7 +39,7 @@
   "vars": {
     "CC3_RPC_URL": "https://rpc.cc3-testnet.creditcoin.network",
     "CC3_CHAIN_ID": "102031",
-    "GRID_GAME_ADDRESS": "0x6DA7B83B5069b2213F9f1233EB545b794801383E",
+    "GRID_GAME_ADDRESS": "0x5D2b31f37342d6a842742628e49b70f0f3507b96",
     "FAUCET_DRIP": "20",
     "FAUCET_DAILY_CAP": "2000",
     "FAUCET_IP_HOURLY": "10"

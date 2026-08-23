@@ -17,7 +17,7 @@
  *
  * The chart itself is drawn to <canvas> as pixels — no numeric price series ever reaches the DOM.
  */
-import {BrowserProvider, Contract, formatEther, parseEther} from 'https://esm.sh/ethers@6.17.0';
+import {BrowserProvider, Contract, formatEther, parseEther, keccak256, solidityPacked} from 'https://esm.sh/ethers@6.17.0';
 
 const $ = (id) => document.getElementById(id);
 
@@ -50,7 +50,7 @@ const CC3_PARAMS = {
     blockExplorerUrls: ['https://creditcoin-testnet.blockscout.com'],
 };
 
-const GRID_GAME = '0x6DA7B83B5069b2213F9f1233EB545b794801383E';
+const GRID_GAME = '0x5D2b31f37342d6a842742628e49b70f0f3507b96';
 
 /**
  * Superseded deployments. Winnings live as in-contract credit, so every migration leaves any
@@ -67,7 +67,11 @@ const LEGACY_GAMES = [
     '0x783432Bf4Eb7A15eE95D003b7a13404F6C70456c',
 ];
 const LEGACY_ABI = ['function balances(address) view returns (uint256)', 'function withdraw(uint256)'];
-const REGISTRY = '0x8965D4425622e4cd44A590c8985dD35b0daC2797';
+const REGISTRY = '0xBCf9D65e6eb421B6dbf2CaEDbB21bCcBD0337dC5';
+const REGISTRY_ABI = [
+    'function windowCount() external view returns (uint256)',
+    'function windowIds(uint256) external view returns (bytes32)',
+];
 
 const GAME_ABI = [
     'function deposit() external payable',
@@ -76,7 +80,7 @@ const GAME_ABI = [
     'function maxBet() external view returns (uint256)',
     'function maxRoundExposure() external view returns (uint256)',
     'function DECISION_BLOCKS() external view returns (uint256)',
-    'function startRound(uint128 ante) external payable returns (uint256,bytes32)',
+    'function startRound(uint128 ante) external payable returns (uint256)',
     'function settleRound(uint256 roundId,uint8[] ts,uint8[] ps,uint128[] amounts) external payable',
     'function settleDirection(uint256 roundId,bool up,uint128 stake) external payable',
     'function DIRECTION_UP_MULT() external view returns (uint32)',
@@ -85,7 +89,12 @@ const GAME_ABI = [
     'function resolveRound(uint256 roundId,uint256[] indices,uint64[] blockNumbers,uint160[] sqrtPrices,bytes32[][] proofs) external',
     'function roundSummary(uint256) external view returns (address,bytes32,uint8,uint128,uint128,uint128)',
     'function deadlineOf(uint256) external view returns (uint256)',
-    'event RoundDealt(uint256 indexed roundId,address indexed player,bytes32 indexed windowId,uint128 ante,uint64 deadlineBlock)',
+    'event RoundDealt(uint256 indexed roundId,address indexed player,uint128 ante,uint64 deadlineBlock,uint64 revealBlock)',
+    'function windowOf(uint256 roundId) external view returns (bytes32)',
+    'error WindowNotYetKnown(uint256 revealBlock,uint256 currentBlock)',
+    'error WindowExpired(uint256 revealBlock)',
+    'error TooSoonToResolve(uint64 settledBlock,uint256 currentBlock)',
+    'error TotalExposureTooHigh(uint256 requested,uint256 cap)',
     'event RoundSettled(uint256 indexed roundId,address indexed player,uint256 staked,uint256 maxPayout)',
     'event RoundResolved(uint256 indexed roundId,address indexed player,uint256 payout)',
     // Without these, every revert surfaces as "unknown custom error" and the player is told
@@ -118,7 +127,7 @@ function explain(e) {
     const args = e?.revert?.args ?? [];
     switch (name) {
         case 'DecisionWindowClosed':
-            return 'too slow — the decision window closed and the ante is forfeit';
+            return 'too slow — the round closed and your opening stake is forfeit';
         case 'ExposureTooHigh':
             return 'max win is too high for the bankroll — spread your bets across more cells';
         case 'StakeBelowAnte':
@@ -130,7 +139,7 @@ function explain(e) {
         case 'WrongRoundState':
             return 'this round was already settled or expired';
         case 'GamePaused':
-            return 'the table is paused (bankroll drawdown breaker)';
+            return 'the game is paused (drawdown breaker tripped)';
         case 'DuplicateCell':
             return 'the same cell was bet twice';
         case 'CellOutOfRange':
@@ -188,7 +197,7 @@ function renderStake() {
  */
 const PHASE = {
     IDLE: 'idle',           // no round; the only phase from which one can be dealt
-    DEALING: 'dealing',     // ante submitted, window not yet known
+    DEALING: 'starting',     // ante submitted, window not yet known
     BETTING: 'betting',     // chart up, clock running — the dangerous one
     SETTLING: 'settling',   // bets submitted, awaiting confirmation
     REVEALING: 'revealing', // animating the hidden path
@@ -437,10 +446,10 @@ async function riddleIntroPlay(text) {
     const started = performance.now();
     for (let n = 1; n <= text.length; n++) {
         el.textContent = text.slice(0, n);
-        if (performance.now() - started > 2600 || document.hidden) { el.textContent = text; break; }
+        if (performance.now() - started > 1400 || document.hidden) { el.textContent = text; break; }
         await new Promise((r) => setTimeout(r, 24));
     }
-    if (!document.hidden) await new Promise((r) => setTimeout(r, 620));
+    if (!document.hidden) await new Promise((r) => setTimeout(r, 300));
 
     // FLIP: from centre-stage to wherever the real blockquote sits right now
     const from = el.getBoundingClientRect();
@@ -449,14 +458,14 @@ async function riddleIntroPlay(text) {
     wrap.classList.add('moving');
     el.style.transform =
         `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${scale})`;
-    await new Promise((r) => setTimeout(r, 640));
+    await new Promise((r) => setTimeout(r, 420));
     wrap.hidden = true;
     wrap.classList.remove('moving');
     el.style.transform = '';
 }
 
 /** Total ceremony budget, wall-clock. Past this the table simply appears — never blocks the round. */
-const INTRO_MAX_MS = 5000;
+const INTRO_MAX_MS = 2600;
 async function riddleIntro(text) {
     await Promise.race([riddleIntroPlay(text), new Promise((r) => setTimeout(r, INTRO_MAX_MS))]);
     // idempotent finalisation, whichever path won
@@ -652,9 +661,59 @@ function renderAnteGrid() {
  * the thing the blind deal is meant to prevent. The windowId only becomes knowable from the
  * RoundDealt receipt, so this cannot be fetched ahead of committing the ante.
  */
+/**
+ * windowOf() reverts until the block after the deal has been mined AND one more has passed, since
+ * a block's own hash is not readable from inside it. About 15s on CC3. Polled rather than slept:
+ * block times drift, and a fixed wait would either stall the deal or miss.
+ */
+/**
+ * Which chart did this round draw?
+ *
+ * The contract derives it from the hash of the block the deal landed in, and that hash is sitting
+ * right there in the receipt — so there is nothing to wait for. Asking the contract instead would
+ * cost a whole extra block, because blockhash(N) is not readable from inside block N.
+ *
+ * Identical arithmetic to GridGame.windowOf(); the chain re-derives and enforces it at settle.
+ * Falls back to polling the contract if anything here disagrees, so a formula drift degrades to
+ * slow rather than broken.
+ */
+async function deriveWindow(roundId, dealBlockHash) {
+    try {
+        const reg = new Contract(REGISTRY, REGISTRY_ABI, state.provider);
+        const n = await reg.windowCount();
+        const seed = BigInt(
+            keccak256(solidityPacked(['bytes32', 'address', 'uint256'], [dealBlockHash, state.address, roundId])),
+        );
+        return await reg.windowIds(seed % n);
+    } catch (e) {
+        return await awaitWindow(roundId);
+    }
+}
+
+/** Block until the chain has moved past `after`. */
+async function nextBlock(after) {
+    if (!after) return;
+    for (;;) {
+        if ((await state.provider.getBlockNumber()) > after) return;
+        await new Promise((r) => setTimeout(r, 400));
+    }
+}
+
+async function awaitWindow(roundId, timeoutMs = 90000) {
+    const started = Date.now();
+    for (;;) {
+        try {
+            return await state.game.windowOf(roundId);
+        } catch (e) {
+            if (Date.now() - started > timeoutMs) throw new Error('the draw did not settle in time');
+            await new Promise((r) => setTimeout(r, 400));
+        }
+    }
+}
+
 async function fetchWindow(windowId) {
     const r = await fetch(`data/w/${windowId}.json`);
-    if (!r.ok) throw new Error('dealt a window this client does not have');
+    if (!r.ok) throw new Error('got a chart this client does not have');
     return r.json();
 }
 
@@ -770,14 +829,14 @@ async function deal() {
     // know the window yet, and the skeleton says so without a spinner
     show('screenPlay');
     skeletonTable();
-    txOpen('confirm the ante in your wallet…');
+    txOpen('confirm in your wallet…');
     syncBets();
 
     try {
         const anteWei = parseEther(String(state.ante));
         // whatever credit doesn't cover rides along as value — no separate deposit
         const tx = await state.game.startRound(anteWei, {value: shortfall(anteWei)});
-        txSet('ante on-chain — dealing…');
+        txSet('confirmed — finding your chart…');
         const rcpt = await tx.wait();
 
         // the window is only knowable from the receipt
@@ -789,7 +848,12 @@ async function deal() {
         if (!ev) throw new Error('RoundDealt not found in receipt');
 
         state.roundId = ev.args.roundId;
-        const wid = ev.args.windowId.toLowerCase();
+        // The window is drawn from the hash of the block AFTER the deal, which does not exist yet.
+        // That is the point: a contract used to call startRound, read the window it drew and revert
+        // the whole transaction if it did not like it, reverse-searching for free. Now there is
+        // nothing to read at deal time, so the ante is unavoidable.
+        txSet('picking your chart…');
+        const wid = (await deriveWindow(state.roundId, rcpt.blockHash)).toLowerCase();
         state.win = await fetchWindow(wid);
 
         await refreshCredit();
@@ -848,7 +912,7 @@ function startClock() {
             clearInterval(state.timer);
             if (state.phase !== PHASE.BETTING) return;   // already signing; let it finish
             if (state.picks.size > 0) lockIn();
-            else showDeadEnd('time up — no bets placed, so the ante is forfeit');
+            else showDeadEnd('time up — no bets placed, so your stake is forfeit');
         }
     };
     tick();
@@ -1065,7 +1129,8 @@ async function lockIn() {
             ? await state.game.settleDirection(state.roundId, state.dir, stakeWei, {value: shortfall(extra)})
             : await state.game.settleRound(state.roundId, ts, ps, amts, {value: shortfall(extra)});
         txSet('locking your bets on-chain…');
-        await tx.wait();
+        const settleRcpt = await tx.wait();
+        state.settleBlock = settleRcpt.blockNumber;
         await refreshCredit();
 
         state.reveal = await fetchReveal(state.win.windowId, state.roundId);
@@ -1145,6 +1210,9 @@ async function resolveOnChain() {
     btn.disabled = true;
     btn.textContent = 'writing the result on-chain…';
     try {
+        // Resolution has to land strictly after the block the bets settled in — otherwise one
+        // transaction could deal, bet and collect, and the decision clock would mean nothing.
+        await nextBlock(state.settleBlock);
         const tx = await state.game.resolveRound(
             state.roundId,
             h.map((c) => c.index),
@@ -1325,7 +1393,7 @@ function renderLeaderboard(justPlayed) {
     const board = readBoard();
     const ol = $('leaderboard');
     if (!ol) return;
-    if (!board.length) { ol.innerHTML = '<div class="empty">no hands yet</div>'; return; }
+    if (!board.length) { ol.innerHTML = '<div class="empty">no rounds yet</div>'; return; }
     ol.innerHTML = board
         .map((e) => {
             const mine = justPlayed && e.at === justPlayed.at;

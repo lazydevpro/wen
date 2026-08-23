@@ -19,6 +19,29 @@ const REVEAL_DIR = new URL('../data/reveals/', import.meta.url).pathname;
 
 const ANTE = parseEther('1');
 
+/** windowOf() reverts until the block after the deal is strictly in the past — the draw derives
+ *  from that block's hash, which is exactly why a dealing transaction cannot peek at it. */
+async function awaitWindow(game: any, roundId: bigint, timeoutMs = 90_000): Promise<string> {
+    const started = Date.now();
+    for (;;) {
+        try {
+            return await game.windowOf(roundId);
+        } catch (e) {
+            if (Date.now() - started > timeoutMs) throw new Error('draw did not settle in time');
+            await new Promise((r) => setTimeout(r, 2000));
+        }
+    }
+}
+
+/** Resolution must land strictly after the settling block, so one transaction can never deal,
+ *  bet and collect. Wait for the chain to move on before revealing. */
+async function nextBlock(provider: any, after: number) {
+    for (;;) {
+        if ((await provider.getBlockNumber()) > after) return;
+        await new Promise((r) => setTimeout(r, 2000));
+    }
+}
+
 async function main() {
     const provider = cc3Provider();
     const wallet = signer(provider);
@@ -50,8 +73,10 @@ async function main() {
     if (!dealt) throw new Error('RoundDealt not emitted');
 
     const roundId: bigint = dealt.args.roundId;
-    const windowId: string = dealt.args.windowId;
     const deadlineBlock: bigint = dealt.args.deadlineBlock;
+    process.stdout.write('    waiting for the draw (window derives from the NEXT block) ... ');
+    const windowId: string = await awaitWindow(game, roundId);
+    console.log('ok');
     console.log(`    roundId       : ${roundId}`);
     console.log(`    windowId      : ${windowId}`);
     console.log(`    deadlineBlock : ${deadlineBlock}  (current ${await provider.getBlockNumber()})`);
@@ -105,6 +130,7 @@ async function main() {
     console.log(`    settled in block ${settleRcpt.blockNumber}`);
 
     // ---- 4. resolve ----
+    await nextBlock(provider, settleRcpt.blockNumber);
     console.log(`\n[4] resolveRound — revealing hidden candles with Merkle proofs`);
     const h = reveal.hidden;
     const resolveRcpt = await (

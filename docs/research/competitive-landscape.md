@@ -30,8 +30,15 @@ Flare runs near-identical architecture to Attestcoin, enshrined at the consensus
    only. Flare built a purpose-made attestation type for exactly the gap that kills Attestcoin's
    monitoring and default-detection use cases.
 2. **Flare covers non-EVM chains** (BTC, DOGE, XRP). Attestcoin covers Ethereum.
-3. **Proofs valid for states no older than 14 days**, but once constructed remain available
-   indefinitely — a cleaner model than Attestcoin's cost curve that rises ~12× with age.
+3. **Proofs valid for states no older than 14 days** (for most chain-data attestation types), but
+   once constructed they remain available indefinitely.
+   ~~a cleaner model than Attestcoin's cost curve that rises ~12× with age.~~ **Withdrawn — this
+   was wrong, and it contradicted our own measurements.** Attestcoin's proof size tracks
+   continuity-root count, which is a function of *checkpoint alignment*, not age: across the five
+   eras sampled in [spike-results.md](spike-results.md), Oct 2021 (1,731 days old) needed 440 roots
+   while Nov 2022 (1,365 days) and Mar 2024 (885 days) each needed 1. There is no age curve. The
+   real comparison is that Flare's window excludes this data entirely while Attestcoin's cost is
+   age-independent.
 4. **New attestation types can be added by provider consensus** — extensible without a chain fork.
 5. Flare markets the same differentiator Creditcoin does: protocol-level, not bolted on at the
    application layer like an oracle, so it inherits the whole network's economic security.

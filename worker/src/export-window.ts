@@ -8,8 +8,7 @@
  *   pnpm export-window luna-2022
  */
 import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
-import {parseUnits, keccak256, toUtf8Bytes} from 'ethers';
-import {GRID_LEAD_STEPS, GRID_PRICE_BANDS, GRID_TIME_STEPS, bandOf, buildMerkle, candleLeaf, merkleProof} from './lib/window.js';
+import {registrationParams} from './lib/registration.js';
 
 const id = process.argv[2];
 if (!id) {
@@ -20,53 +19,15 @@ if (!id) {
 const src = new URL(`../data/windows/${id}.json`, import.meta.url).pathname;
 const win = JSON.parse(readFileSync(src, 'utf8'));
 
-// rehydrate bigints
-const candles = win.candles.map((c: any) => ({...c, sqrtPriceX96: BigInt(c.sqrtPriceX96)}));
-const visibleCount: number = win.visibleCount;
-const anchor = candles[visibleCount - 1];
-
-// Merkle tree over all candles, so we can emit real inclusion proofs
-const leaves = candles.map(candleLeaf);
-const {root, layers} = buildMerkle(leaves);
-if (root !== win.merkleRoot) throw new Error(`merkle mismatch: rebuilt ${root} vs stored ${win.merkleRoot}`);
-
-// hidden candles the grid actually covers — the runway is travelled, not bet on. GridGame pins
-// each revealed index to visibleCount + GRID_LEAD_STEPS + t, so this offset is load-bearing.
-const firstOutcome = visibleCount + GRID_LEAD_STEPS;
-const hidden = candles.slice(firstOutcome, firstOutcome + GRID_TIME_STEPS);
-
-const expectedBands = hidden.map((c: any) =>
-    bandOf(c.close, win.anchorPrice, win.bandHeight, GRID_PRICE_BANDS),
-);
-
+// Single source of truth. register-bulk.ts sends exactly this payload on-chain, so the fixture
+// the Solidity tests assert against and the window the chain actually holds cannot drift apart.
+// This script used to rebuild all of it inline — a verbatim second copy of registrationParams(),
+// which is the exact duplication lib/registration.ts exists to prevent.
 const fixture = {
     _comment:
         'Exported from a real wen window. expectedBands come from the TypeScript bandOf(); ' +
         'the Solidity test must agree or resolution pays the wrong cells.',
-    windowId: keccak256(toUtf8Bytes(win.id)),
-    eraLabel: win.era.label,
-    riddleHash: keccak256(toUtf8Bytes(win.era.riddle)),
-    merkleRoot: root,
-    anchorSqrtPriceX96: anchor.sqrtPriceX96.toString(),
-    // bandHeight is a fraction of anchor price; scale to 1e18 for on-chain fixed point
-    bandHeightScaled: parseUnits(win.bandHeight.toFixed(18), 18).toString(),
-    totalCandles: candles.length,
-    visibleCount,
-    timeSteps: GRID_TIME_STEPS,
-    priceBands: GRID_PRICE_BANDS,
-    invert: win.pool.invert,
-    // multipliers scaled by 1e4, flattened as t * priceBands + p
-    multipliers: win.grid.map((c: any) => Math.round(c.multiplier * 1e4)),
-    visibleSqrtPrices: candles.slice(0, visibleCount).map((c: any) => c.sqrtPriceX96.toString()),
-    hidden: hidden.map((c: any, t: number) => ({
-        t,
-        index: c.index,
-        blockNumber: c.blockNumber,
-        sqrtPriceX96: c.sqrtPriceX96.toString(),
-        price: c.close,
-        expectedBand: expectedBands[t],
-        proof: merkleProof(layers, c.index),
-    })),
+    ...registrationParams(win),
 };
 
 const dir = new URL('../../contracts/test/fixtures/', import.meta.url).pathname;
@@ -80,6 +41,7 @@ console.log(`   era         : ${fixture.eraLabel}`);
 console.log(`   merkle root : ${fixture.merkleRoot}`);
 console.log(`   anchor sqrt : ${fixture.anchorSqrtPriceX96}`);
 console.log(`   bandHeight  : ${win.bandHeight} -> ${fixture.bandHeightScaled}`);
+console.log(`   candles     : ${fixture.blockNumbers.length} (pool ${fixture.pool})`);
 console.log(`   grid        : ${fixture.timeSteps}x${fixture.priceBands}, ${fixture.multipliers.length} multipliers`);
 console.log(`   hidden      : ${fixture.hidden.length} candles`);
-console.log(`   bands (TS)  : ${expectedBands.join(', ')}`);
+console.log(`   bands (TS)  : ${fixture.hidden.map((h) => h.expectedBand).join(', ')}`);

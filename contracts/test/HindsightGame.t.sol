@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
-import {ChartRegistry} from "../src/ChartRegistry.sol";
+import {ChartRegistry, IChartVerifier} from "../src/ChartRegistry.sol";
 import {GridGame} from "../src/GridGame.sol";
 
 /**
@@ -12,7 +12,40 @@ import {GridGame} from "../src/GridGame.sol";
  * The most important assertion here is test_BandMathMatchesTypeScript: if Solidity's bandOf()
  * disagrees with the worker's, resolution pays the wrong cells and the whole game is broken.
  */
+/**
+ * Stands in for ChartVerifier so these tests need no live Attestcoin proof. It is seeded from the
+ * same fixture the registry is handed, so "proven" here means exactly what it means on-chain:
+ * this pool, this block, this price. ChartVerifier.t.sol covers the real proving path.
+ */
+contract MockVerifier is IChartVerifier {
+    mapping(address => mapping(uint64 => uint160)) internal _proven;
+
+    function set(address pool, uint64 blockNumber, uint160 sqrtPriceX96) external {
+        _proven[pool][blockNumber] = sqrtPriceX96;
+    }
+
+    function provenPrice(address pool, uint64 blockNumber) external view returns (uint160) {
+        return _proven[pool][blockNumber];
+    }
+}
+
+/// Reproduces the "deal, look, revert" attack: a contract paid nothing to reverse-search a window
+/// because it could read the windowId and undo the whole transaction if it did not like it.
+contract PeekBot {
+    GridGame public game;
+    constructor(GridGame g) payable { game = g; }
+    function peek(uint128 ante) external returns (bytes32) {
+        uint256 rid = game.startRound{value: ante}(ante);
+        return game.windowOf(rid);   // must revert: the window is not knowable yet
+    }
+}
+
 contract HindsightGameTest is Test {
+    MockVerifier internal verifier;
+    address internal pool;
+    uint64[] internal blockNumbers;
+    uint160[] internal sqrtPrices;
+
     ChartRegistry internal registry;
     GridGame internal game;
 
@@ -42,14 +75,24 @@ contract HindsightGameTest is Test {
         uint160[] memory visible = new uint160[](visRaw.length);
         for (uint256 i = 0; i < visRaw.length; i++) visible[i] = uint160(visRaw[i]);
 
-        registry = new ChartRegistry();
+        pool = vm.parseJsonAddress(json, ".pool");
+        uint256[] memory blkRaw = vm.parseJsonUintArray(json, ".blockNumbers");
+        uint256[] memory prcRaw = vm.parseJsonUintArray(json, ".sqrtPrices");
+
+        // Seed the verifier first: registration now REFUSES candles it cannot find here.
+        verifier = new MockVerifier();
+        for (uint256 i = 0; i < blkRaw.length; i++) {
+            blockNumbers.push(uint64(blkRaw[i]));
+            sqrtPrices.push(uint160(prcRaw[i]));
+            verifier.set(pool, uint64(blkRaw[i]), uint160(prcRaw[i]));
+        }
+
+        registry = new ChartRegistry(verifier);
         registry.registerWindow(
             ChartRegistry.RegisterParams({
                 windowId: windowId,
-                merkleRoot: vm.parseJsonBytes32(json, ".merkleRoot"),
-                anchorSqrtPriceX96: uint160(vm.parseJsonUint(json, ".anchorSqrtPriceX96")),
+                pool: pool,
                 bandHeight: vm.parseJsonUint(json, ".bandHeightScaled"),
-                totalCandles: uint16(vm.parseJsonUint(json, ".totalCandles")),
                 visibleCount: uint16(vm.parseJsonUint(json, ".visibleCount")),
                 timeSteps: timeSteps,
                 priceBands: priceBands,
@@ -57,9 +100,11 @@ contract HindsightGameTest is Test {
                 eraLabel: vm.parseJsonString(json, ".eraLabel"),
                 riddleHash: vm.parseJsonBytes32(json, ".riddleHash"),
                 multipliers: multipliers,
-                visible: visible
+                blockNumbers: blockNumbers,
+                sqrtPrices: sqrtPrices
             })
         );
+        visible; // retained for readability of the fixture parse above
 
         for (uint256 t = 0; t < timeSteps; t++) {
             expectedBands.push(vm.parseJsonInt(json, string.concat(".hidden[", vm.toString(t), "].expectedBand")));
@@ -144,7 +189,8 @@ contract HindsightGameTest is Test {
 
     function _dealRound(address who, uint128 ante) internal returns (uint256 roundId) {
         vm.prank(who);
-        (roundId,) = game.startRound(ante);
+        roundId = game.startRound(ante);
+        vm.roll(block.number + 1);
     }
 
     function _cells(uint8 t, uint8 p, uint128 amt)
@@ -172,14 +218,18 @@ contract HindsightGameTest is Test {
         _deposit(PLAYER, 5 ether);
 
         vm.prank(PLAYER);
-        (uint256 roundId, bytes32 assigned) = game.startRound(0.1 ether);
+        uint256 roundId = game.startRound(0.1 ether);
+        vm.roll(block.number + 1);
+        bytes32 assigned = game.windowOf(roundId);
 
         assertEq(assigned, windowId, "only one window registered, so it must be dealt");
         assertEq(game.balances(PLAYER), 5 ether - 0.1 ether, "ante debited");
 
         (address player, bytes32 w, uint8 state, uint128 ante) = _round(roundId);
         assertEq(player, PLAYER);
-        assertEq(w, windowId);
+        // stored windowId stays zero until settle: the round has drawn a window, but committing it
+        // at deal time is exactly what let a contract peek and revert without paying the ante
+        assertEq(w, bytes32(0), "window not committed until settle");
         assertEq(state, uint8(1), "Dealt");
         assertEq(ante, 0.1 ether);
     }
@@ -204,7 +254,8 @@ contract HindsightGameTest is Test {
         assertEq(game.balances(PLAYER), 0, "no credit at all");
 
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 0.1 ether}(0.1 ether);
+        uint256 roundId = game.startRound{value: 0.1 ether}(0.1 ether);
+        vm.roll(block.number + 1);
 
         (address player,, uint8 state, uint128 ante) = _round(roundId);
         assertEq(player, PLAYER);
@@ -237,7 +288,8 @@ contract HindsightGameTest is Test {
     function test_SettleRoundWithValueCoversShortfall() public {
         vm.deal(PLAYER, 1 ether);
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 0.01 ether}(0.01 ether);
+        uint256 roundId = game.startRound{value: 0.01 ether}(0.01 ether);
+        vm.roll(block.number + 1);
 
         uint8 winning = uint8(uint256(expectedBands[0]));
         (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, winning, 0.03 ether);
@@ -247,6 +299,7 @@ contract HindsightGameTest is Test {
         game.settleRound{value: 0.02 ether}(roundId, ts, ps, amts);
 
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
 
         uint32 mult = registry.multiplierAt(windowId, 0, winning);
@@ -275,6 +328,7 @@ contract HindsightGameTest is Test {
 
         uint256 before = game.balances(PLAYER);
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
 
         assertEq(game.balances(PLAYER) - before, expectedPayout, "payout credited to balance");
@@ -293,6 +347,7 @@ contract HindsightGameTest is Test {
 
         uint256 before = game.balances(PLAYER);
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
         assertEq(game.balances(PLAYER), before, "losing bet pays nothing");
     }
@@ -311,7 +366,8 @@ contract HindsightGameTest is Test {
         vm.deal(PLAYER, 5 ether);
         uint128 ante = 0.01 ether;
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+        uint256 roundId = game.startRound{value: 1 ether}(ante);
+        vm.roll(block.number + 1);
 
         bool closedUp = _fixtureClosedUp();
         vm.prank(PLAYER);
@@ -319,6 +375,7 @@ contract HindsightGameTest is Test {
 
         uint256 before = game.balances(PLAYER);
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
 
         uint32 mult = closedUp ? game.DIRECTION_UP_MULT() : game.DIRECTION_DOWN_MULT();
@@ -330,7 +387,8 @@ contract HindsightGameTest is Test {
         vm.deal(PLAYER, 5 ether);
         uint128 ante = 0.01 ether;
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+        uint256 roundId = game.startRound{value: 1 ether}(ante);
+        vm.roll(block.number + 1);
 
         // computed BEFORE the prank: _fixtureClosedUp reads the registry, and vm.prank only
         // covers the next external call — inlining it here would consume the prank
@@ -340,6 +398,7 @@ contract HindsightGameTest is Test {
 
         uint256 before = game.balances(PLAYER);
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
         assertEq(game.balances(PLAYER), before, "wrong direction pays nothing");
     }
@@ -366,12 +425,14 @@ contract HindsightGameTest is Test {
         vm.deal(PLAYER, 5 ether);
         uint128 ante = 0.01 ether;
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+        uint256 roundId = game.startRound{value: 1 ether}(ante);
+        vm.roll(block.number + 1);
         bool closedUp = _fixtureClosedUp();
         vm.prank(PLAYER);
         game.settleDirection(roundId, closedUp, ante);
 
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
 
         (,, GridGame.RoundState st,,, uint128 paid) = game.roundSummary(roundId);
@@ -383,7 +444,8 @@ contract HindsightGameTest is Test {
         vm.deal(PLAYER, 100 ether);
         uint128 ante = 0.01 ether;
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 50 ether}(ante);
+        uint256 roundId = game.startRound{value: 50 ether}(ante);
+        vm.roll(block.number + 1);
 
         // below the ante is refused, exactly as in grid mode
         vm.prank(PLAYER);
@@ -402,7 +464,8 @@ contract HindsightGameTest is Test {
         vm.deal(PLAYER, 5 ether);
         uint128 ante = 0.01 ether;
         vm.prank(PLAYER);
-        (uint256 roundId,) = game.startRound{value: 1 ether}(ante);
+        uint256 roundId = game.startRound{value: 1 ether}(ante);
+        vm.roll(block.number + 1);
 
         vm.prank(PLAYER);
         game.settleDirection(roundId, true, ante);
@@ -423,7 +486,8 @@ contract HindsightGameTest is Test {
     function test_RejectsRepeatedCandleAcrossColumns() public {
         vm.deal(PLAYER, 50 ether);
         vm.prank(PLAYER);
-        (xRound,) = game.startRound{value: 1 ether}(0.01 ether);
+        xRound = game.startRound{value: 1 ether}(0.01 ether);
+        vm.roll(block.number + 1);
 
         xBand = uint8(uint256(expectedBands[0]));
         require(uint256(expectedBands[2]) != xBand, "fixture needs differing bands");
@@ -450,6 +514,7 @@ contract HindsightGameTest is Test {
         uint160[] memory sps = new uint160[](timeSteps);
         bytes32[][] memory prs = new bytes32[][](timeSteps);
         for (uint256 t = 0; t < timeSteps; t++) { idx[t] = i0; bns[t] = b0; sps[t] = s0; prs[t] = pr0; }
+        vm.roll(block.number + 1);
         game.resolveRound(xRound, idx, bns, sps, prs);
     }
 
@@ -473,7 +538,7 @@ contract HindsightGameTest is Test {
         _deposit(PLAYER, 5 ether);
         uint256 roundId = _dealRound(PLAYER, 0.01 ether);
 
-        vm.roll(block.number + game.DECISION_BLOCKS()); // exactly on the deadline
+        vm.roll(game.deadlineOf(roundId)); // exactly on the deadline
 
         (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.01 ether);
         vm.prank(PLAYER);
@@ -579,6 +644,7 @@ contract HindsightGameTest is Test {
         sps[0] = sps[0] + 1;
 
         vm.expectRevert(abi.encodeWithSelector(GridGame.BadCandleProof.selector, idx[0]));
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
     }
 
@@ -591,65 +657,180 @@ contract HindsightGameTest is Test {
         game.settleRound(roundId, ts, ps, amts);
 
         (uint256[] memory idx, uint64[] memory bns, uint160[] memory sps, bytes32[][] memory prs) = _revealAll();
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
 
         vm.expectRevert(abi.encodeWithSelector(GridGame.WrongRoundState.selector, roundId));
+        vm.roll(block.number + 1);
         game.resolveRound(roundId, idx, bns, sps, prs);
+    }
+
+
+    /// Minimal params that get past the length checks, for tests about a specific revert.
+    function _fakeParams(bytes32 id, uint32[] memory m) internal view returns (ChartRegistry.RegisterParams memory) {
+        uint64[] memory b = new uint64[](1);
+        uint160[] memory q = new uint160[](1);
+        b[0] = blockNumbers[0];
+        q[0] = sqrtPrices[0];
+        return ChartRegistry.RegisterParams({
+            windowId: id,
+            pool: pool,
+            bandHeight: 1e16,
+            visibleCount: 1,
+            timeSteps: timeSteps,
+            priceBands: priceBands,
+            invert: true,
+            eraLabel: "fake",
+            riddleHash: bytes32(0),
+            multipliers: m,
+            blockNumbers: b,
+            sqrtPrices: q
+        });
     }
 
     // --------------------------------------------------------- registry
 
     function test_OnlyOwnerCanRegisterWindow() public {
         uint32[] memory m = new uint32[](uint256(timeSteps) * uint256(priceBands));
-        uint160[] memory v = new uint160[](1);
-
         vm.prank(ATTACKER);
         vm.expectRevert(ChartRegistry.NotOwner.selector);
         registry.registerWindow(
-            ChartRegistry.RegisterParams({
-                windowId: keccak256("fake"),
-                merkleRoot: bytes32(0),
-                anchorSqrtPriceX96: 1,
-                bandHeight: 1e16,
-                totalCandles: 1,
-                visibleCount: 1,
-                timeSteps: timeSteps,
-                priceBands: priceBands,
-                invert: true,
-                eraLabel: "fake",
-                riddleHash: bytes32(0),
-                multipliers: m,
-                visible: v
-            })
+            _fakeParams(keccak256("fake"), m)
         );
     }
 
     function test_RejectsGridSizeMismatch() public {
         uint32[] memory m = new uint32[](3); // wrong length
-        uint160[] memory v = new uint160[](1);
-
         vm.expectRevert(
             abi.encodeWithSelector(
                 ChartRegistry.GridSizeMismatch.selector, uint256(timeSteps) * uint256(priceBands), uint256(3)
             )
         );
         registry.registerWindow(
+            _fakeParams(keccak256("fake2"), m)
+        );
+    }
+
+
+    // ---- the provenance gate --------------------------------------------------
+    // These three are the regression tests for the hole this gate exists to close: before it,
+    // registerWindow validated two array lengths and took the operator's merkle root on faith,
+    // so a window of candles at Ethereum blocks that do not exist registered and resolved
+    // cleanly. A merkle proof answers "is this candle in the set I committed", never "did this
+    // happen on Ethereum" — provenance has to be checked at registration or not at all.
+
+    function test_RejectsWindowWithUnprovenCandles() public {
+        uint64[] memory b = new uint64[](2);
+        uint160[] memory q = new uint160[](2);
+        // Ethereum head is ~23M. These blocks do not exist and never will.
+        b[0] = 99_000_000;
+        b[1] = 99_000_001;
+        q[0] = 1_700_000_000_000_000_000_000_000_000_000_000;
+        q[1] = 1_700_000_000_000_000_000_000_000_000_000_001;
+
+        uint32[] memory m = new uint32[](uint256(timeSteps) * uint256(priceBands));
+        vm.expectRevert(abi.encodeWithSelector(ChartRegistry.CandleNotProven.selector, uint256(0), uint64(99_000_000)));
+        registry.registerWindow(
             ChartRegistry.RegisterParams({
-                windowId: keccak256("fake2"),
-                merkleRoot: bytes32(0),
-                anchorSqrtPriceX96: 1,
+                windowId: keccak256("fabricated"),
+                pool: pool,
                 bandHeight: 1e16,
-                totalCandles: 1,
                 visibleCount: 1,
                 timeSteps: timeSteps,
                 priceBands: priceBands,
                 invert: true,
-                eraLabel: "fake",
+                eraLabel: "a window from nowhere",
                 riddleHash: bytes32(0),
                 multipliers: m,
-                visible: v
+                blockNumbers: b,
+                sqrtPrices: q
             })
         );
+    }
+
+    function test_RejectsRestatedPriceAtProvenBlock() public {
+        // The block IS proven — but at a different price. Checking only the block number would
+        // let the operator keep the real timeline and move the prices, which is the whole game.
+        uint64[] memory b = new uint64[](1);
+        uint160[] memory q = new uint160[](1);
+        b[0] = blockNumbers[0];
+        q[0] = sqrtPrices[0] + 1;
+
+        uint32[] memory m = new uint32[](uint256(timeSteps) * uint256(priceBands));
+        vm.expectRevert(abi.encodeWithSelector(ChartRegistry.CandleNotProven.selector, uint256(0), blockNumbers[0]));
+        registry.registerWindow(
+            ChartRegistry.RegisterParams({
+                windowId: keccak256("restated"),
+                pool: pool,
+                bandHeight: 1e16,
+                visibleCount: 1,
+                timeSteps: timeSteps,
+                priceBands: priceBands,
+                invert: true,
+                eraLabel: "right block, wrong price",
+                riddleHash: bytes32(0),
+                multipliers: m,
+                blockNumbers: b,
+                sqrtPrices: q
+            })
+        );
+    }
+
+    function test_DerivedRootMatchesOffchainBuilder() public view {
+        // The registry now computes the root itself. If its tree shape ever diverges from
+        // worker/src/lib/window.ts buildMerkle(), every inclusion proof the worker emits would
+        // stop verifying and no hidden candle could be revealed. This pins the two together.
+        (, bytes32 storedRoot,,,,,,,,,) = registry.windows(windowId);
+        assertEq(storedRoot, vm.parseJsonBytes32(json, ".merkleRoot"), "on-chain root != off-chain root");
+        assertTrue(storedRoot != bytes32(0), "root should not be empty");
+    }
+
+    function test_AnchorIsDerivedFromProvenCandles() public view {
+        (,, uint160 anchor,,,,,,,,) = registry.windows(windowId);
+        assertEq(anchor, sqrtPrices[uint256(vm.parseJsonUint(json, ".visibleCount")) - 1], "anchor not derived");
+        assertEq(anchor, uint160(vm.parseJsonUint(json, ".anchorSqrtPriceX96")), "anchor != fixture");
+    }
+
+    // ---- the three economic guards ------------------------------------------
+
+    function test_ContractCannotPeekAtWindowInDealTransaction() public {
+        PeekBot bot = new PeekBot{value: 5 ether}(game);
+        // The window derives from the hash of the NEXT block, so there is nothing to read yet and
+        // nothing to revert away from. Paying to look is now unavoidable.
+        vm.expectRevert(abi.encodeWithSelector(GridGame.WindowNotYetKnown.selector, block.number, block.number));
+        bot.peek(0.1 ether);
+    }
+
+    function test_CannotResolveInTheSettlingBlock() public {
+        _deposit(PLAYER, 5 ether);
+        uint256 roundId = _dealRound(PLAYER, 0.01 ether);
+        (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.01 ether);
+        vm.prank(PLAYER);
+        game.settleRound(roundId, ts, ps, amts);
+
+        // deal -> bet -> collect inside one transaction was worth 4.62 ether on a 1 ether bet
+        (uint256[] memory idx, uint64[] memory blks, uint160[] memory sps, bytes32[][] memory prf) = _revealAll();
+        vm.expectRevert(
+            abi.encodeWithSelector(GridGame.TooSoonToResolve.selector, uint64(block.number), block.number)
+        );
+        game.resolveRound(roundId, idx, blks, sps, prf);
+    }
+
+    function test_TotalExposureIsBoundedAcrossOpenRounds() public {
+        // EXPOSURE_DIVISOR bounds ONE round. Eighty open at once drained 93.7% of a bankroll
+        // through a breaker set at 30%, because nothing summed them.
+        _deposit(PLAYER, 500 ether);
+        uint256 cap = game.bankroll() / game.TOTAL_EXPOSURE_DIVISOR();
+        uint256 opened;
+        for (uint256 i = 0; i < 200; i++) {
+            uint256 rid = _dealRound(PLAYER, 0.5 ether);
+            (uint8[] memory ts, uint8[] memory ps, uint128[] memory amts) = _cells(0, 0, 0.5 ether);
+            vm.prank(PLAYER);
+            try game.settleRound(rid, ts, ps, amts) { opened++; } catch { break; }
+        }
+        assertGt(opened, 0, "should open some rounds");
+        assertLe(game.outstandingExposure(), cap, "pool-wide exposure never exceeds the cap");
+        assertLt(opened, 200, "the cap must actually bind");
     }
 
     receive() external payable {}

@@ -31,8 +31,11 @@ layer is unique:
 - **No lookback limit.** `attestationGenesisHeight = 0`, and we verified it empirically by proving
   transactions from October 2021 — **1,731 days old** — all the way through March 2024.
 - **Flat cost.** 2.3×10⁻⁵ to 2.0×10⁻⁴ CTC regardless of age.
-- **Flare's FDC, the closest comparable attestation layer, has a hard 14-day request window.**
-  Historical attestation is architecturally excluded there. This game cannot be built on it.
+- **Flare's FDC, the closest comparable attestation layer, caps the age of the underlying data.**
+  Its docs put the maximum allowed data age at **14 days for most chain-data attestation types** —
+  the class that `EVMTransaction`, and therefore a Uniswap swap from 2022, falls into. (A few
+  non-chain-data types such as `AddressValidity` and `Web2Json` carry no practical limit, so the
+  cap is per-type rather than global.) For this game's data the window excludes every era it deals.
 
 Latency is also structurally free here: Attestcoin runs ~7.4 minutes behind Ethereum, which matters
 for live data and not at all for transactions from 2022.
@@ -42,9 +45,9 @@ for live data and not at all for transactions from 2022.
 | Contract | Address |
 |---|---|
 | `EvmV1Decoder` (library) | `0xcba2A0C9CBbbA5179fCCd2f5049Ea37D2BB939C7` |
-| `ChartVerifier` | `0x6eeeA8340195B1eE41883AA2F489a9259ab238cF` |
-| `ChartRegistry` | `0x8965D4425622e4cd44A590c8985dD35b0daC2797` |
-| `GridGame` | `0x6DA7B83B5069b2213F9f1233EB545b794801383E` |
+| `ChartVerifier` | `0xE64f8b159FC22F9B0B1ca4980362eB5765cAb0f3` |
+| `ChartRegistry` | `0xBCf9D65e6eb421B6dbf2CaEDbB21bCcBD0337dC5` |
+| `GridGame` | `0x5D2b31f37342d6a842742628e49b70f0f3507b96` |
 
 Precompiles used: BlockProver `0x…0FD2`, ChainInfo `0x…0FD3`. Source chain: Ethereum mainnet,
 **chainKey 3**.
@@ -116,8 +119,38 @@ Inherited from `USCBase.processedQueries`, keyed on `keccak(chainKey, blockHeigh
 
 **5. Merkle commitment for hidden candles**
 The full candle series is committed as a root at registration; hidden candles are revealed one at
-a time with inclusion proofs. The operator can neither forge a candle (each is Attestcoin-proven)
-nor swap the series mid-round (the root is fixed).
+a time with inclusion proofs, so the operator cannot swap the series mid-round.
+
+**6. Provenance enforced at registration — the one that was missing**
+A Merkle proof answers *"is this candle in the set I committed"*, never *"did this happen on
+Ethereum"*. For a while this document claimed guard 5 delivered both. It did not, and the gap was
+total: `registerWindow` was `onlyOwner`, validated two array lengths, and stored whatever root it
+was handed. A window of candles at block 99,000,000 — a height Ethereum will not reach for years —
+registered and resolved cleanly. Attestcoin ran in a separate offline script whose output nothing
+read, so the real trust root was the deployer's key.
+
+`ChartRegistry` now holds an immutable `IChartVerifier` and refuses any candle whose
+`(pool, block, price)` the verifier does not know:
+
+```solidity
+if (verifier.provenPrice(pool, blocks[i]) != prices[i]) revert CandleNotProven(i, blocks[i]);
+```
+
+The price is checked, not just the block — proving *a* swap in a block must not license committing
+a different price for it. `merkleRoot`, `anchorSqrtPriceX96`, the visible series and `totalCandles`
+are then **derived** from those verified candles instead of accepted as calldata: anything the
+operator can state independently is something the operator can lie about.
+
+Regression tests: `test_RejectsWindowWithUnprovenCandles`, `test_RejectsRestatedPriceAtProvenBlock`,
+`test_DerivedRootMatchesOffchainBuilder`.
+
+**What the gate caught on its first run.** 14 of 120 windows failed to register. The cause was real
+and had been invisible: `foldBuckets` builds a candle from the *last* swap in its bucket and keeps
+that swap's `txHash`, while `recordCandle` proves that transaction and takes the *first* swap
+matching the pool. When the closing transaction touches the pool twice — split route, multi-hop,
+arb — they are different swaps a few parts per million apart. About 0.5% of candles, which is ~12%
+of 40-candle windows. Both prices are genuine; only one is attested, so `reconcile-proven.ts`
+adopts the proven one and rebuilds everything derived from it. All 120 windows now register.
 
 ## A gap in `USCBase`, and how we worked around it
 
@@ -130,43 +163,97 @@ unchanged, and disables `execute()` so it cannot silently record a candle with n
 
 ## Measurements
 
-All figures measured live against CC3 Testnet, not taken from documentation.
+Blocks, prices, ages, continuity-root counts and gas are **measured live** against CC3 Testnet.
+The cost column is **modelled** — flagged as such below rather than presented as observed.
 
 **Historical proving** — five eras, all verified:
 
-| Era | Block | ETH | Age | Continuity roots | Cost |
+| Era | Block | ETH | Age | Continuity roots | Cost (modelled) |
 |---|---|---|---|---|---|
-| Oct 2021 | 13,314,561 | $2,937 | 1,731 days | 440 | 1.51e-4 CTC |
-| May 2022 (Luna) | 14,770,000 | $2,076 | 1,528 days | 1 | 2.33e-5 CTC |
-| Sep 2022 (Merge) | 15,537,400 | $1,606 | 1,422 days | 601 | 1.97e-4 CTC |
-| Nov 2022 (FTX) | 15,950,000 | $1,270 | 1,365 days | 1 | 2.33e-5 CTC |
-| Mar 2024 | 19,400,000 | $3,907 | 885 days | 1 | 2.33e-5 CTC |
+| Oct 2021 | 13,314,561 | $2,937 | 1,731 days | 440 | ~1.51e-4 CTC |
+| May 2022 (Luna) | 14,770,000 | $2,076 | 1,528 days | 1 | ~2.33e-5 CTC |
+| Sep 2022 (Merge) | 15,537,400 | $1,606 | 1,422 days | 601 | ~1.97e-4 CTC |
+| Nov 2022 (FTX) | 15,950,000 | $1,270 | 1,365 days | 1 | ~2.33e-5 CTC |
+| Mar 2024 | 19,400,000 | $3,907 | 885 days | 1 | ~2.33e-5 CTC |
 
-Every price matches real history.
+Every price matches real history, and each row is a live `verifySingle` against the BlockProver
+precompile — those parts are observed.
 
-**Batching** — 10 swaps sharing one continuity proof cost **10× less** than proving separately.
+**The cost column is not.** Every figure in it comes from `cost = 2.3e-5 + 2.9e-7 × roots`
+([`spike-historical.ts:94`](../worker/src/spike-historical.ts)), a linear model whose two constants
+are hardcoded in three files and are not themselves validated anywhere in this repo. Read it as an
+order-of-magnitude estimate, not a measurement.
 
-**Attestation lag** — 37 blocks (~7.4 min), matching the `EvmSafe` maturity strategy on testnet.
+**Batching** — 10 swaps share a single continuity proof and verify in one `verifyBatch` view call.
+That sharing is real and is the substantive result. The "10× cheaper" headline is *not* a separate
+finding: it is the same linear model divided by itself, so it collapses to the batch size by
+construction ([`spike-batch.ts:85`](../worker/src/spike-batch.ts)). Ten swaps would report "10×"
+whatever the constants were.
+
+**Attestation lag** — 37 blocks (~7.4 min) on testnet, consistent with the `EvmSafe` maturity
+strategy. Single observation, not a distribution.
 
 **On-chain recording** — 8 Luna-era candles recorded, gas 462k–1.3M, scaling with continuity-root
 count. `pnpm verify-onchain` reads them back and confirms all 8 match Ethereum mainnet.
 
-## Practical findings the docs get wrong or omit
+## Practical findings
 
-1. **`waitUntilHeightAttested` lives on `PrecompileChainInfoProvider`, not `ProofBuilder`.** The
-   documented example (`proofBuilder.waitUntilHeightAttested`) does not exist.
-2. **`getBatchProof` returns a nested `Map<height, Map<txIndex, entry>>`** that must be flattened
-   into parallel arrays for `verifyBatch`.
-3. **`verifySingle` / `verifyBatch` are view calls.** The whole proof pipeline can be developed and
-   tested with a zero balance — funds are only needed for `verifyAndEmit`.
-4. **Continuity-root count varies from 1 to ~1000 for similar-age transactions**, depending on
-   whether the block lands on a sparse checkpoint. That is an ~8× cost and gas difference for
-   otherwise identical proofs; the indexer should prefer checkpoint-aligned blocks.
-5. **The SDK's default 100s proof timeout is too short for deep history.** Proofs carrying ~1000
-   continuity roots time out intermittently; we raise it to 300s.
-6. **`forge script` cannot deploy to Creditcoin** — the chain does not set `prevrandao` and
-   Foundry's script runner panics. Use `forge create` with an explicit `--libraries` link for
-   `EvmV1Decoder`.
+Against `@gluwa/usc-sdk@0.18.0`, the version pinned since this repo's first commit. An earlier
+draft of this section listed six findings; three did not survive being checked against the SDK
+source and have been withdrawn rather than quietly deleted — see *Withdrawn* below.
+
+**1. `forge script` cannot deploy to Creditcoin.** The chain does not populate `prevrandao`, and
+Foundry's script runner rejects the header before any deployment happens:
+
+```
+Error: Failed to deploy script:
+EVM error; header validation error: `prevrandao` not set
+```
+
+Reproducible with no key, no funds and no broadcast via
+[`script/tmp/PrevrandaoProbe.s.sol`](../contracts/script/tmp/PrevrandaoProbe.s.sol) on Foundry
+1.5.1-stable. Root cause is visible straight off the RPC — CC3 block headers carry
+`difficulty: 0x0` and no `mixHash` field at all. Workaround: `forge create` with an explicit
+`--libraries` link for `EvmV1Decoder`.
+
+**2. The SDK's shipped examples contradict its own deprecation notice.** `waitUntilHeightAttested`
+has two implementations. The one on `PrecompileChainInfoProvider` is marked legacy in its own
+docstring, which redirects you elsewhere (`chain-info/index.d.ts:212`):
+
+> "This is a legacy implementation! ... use the implementation of `waitUntilHeightAttested` in
+> src/proof-provider/service/index.ts"
+
+Yet both shipped examples call precisely that legacy method — `examples/end-to-end.ts:19` and
+`examples/supported-chains-attestation-information.ts:22`. A reader following the examples adopts
+the deprecated path. (This repo does too, at `spike.ts:51`.)
+
+**3. The default proof-builder timeout is 10 seconds**, which is too short for deep history —
+`constructor(chainKey, builderUrl, timeout = 10000)` in `proof-provider/service/index.js:108`.
+Proofs carrying several hundred continuity roots time out intermittently at that setting; we pass
+`300_000` explicitly ([`prove-candles.ts:58`](../worker/src/prove-candles.ts)).
+
+**4. Continuity-root count varies from 1 to 601 across our five sampled eras**, depending on
+whether the block lands on a sparse checkpoint — measured, and independent of transaction age.
+Under the cost model above that implies a large cost and gas spread for otherwise identical proofs,
+so an indexer should prefer checkpoint-aligned blocks. The *root counts* are measured; the cost
+consequence inherits the model's caveat, and "~8×" was an artifact of that model rather than an
+observed billing difference.
+
+**5. `verifySingle` / `verifyBatch` are view calls** — implemented as `staticCall`
+(`block-prover/index.js:114,220`) and taking no `Signer`, unlike `verifyAndEmit*`. The whole proof
+pipeline can therefore be developed and tested with a zero balance. Inferable from the type
+signatures, so this is a documentation suggestion rather than a defect: it is worth stating
+explicitly in the quickstart.
+
+### Withdrawn
+
+- ~~"`waitUntilHeightAttested` does not exist on `ProofBuilder`."~~ **False.** It exists at
+  `proof-provider/service/index.d.ts:158`. Superseded by finding 2, which points the other way.
+- ~~"`getBatchProof`'s nested `Map` return is undocumented."~~ **False.** The type is nested
+  (`proof-provider/index.d.ts:62`), but `examples/batch-proof-validation.ts` demonstrates the exact
+  flattening loop, with an explanatory comment.
+- ~~"Continuity roots vary 1 to ~1000."~~ Overstated; the measured range across our sample is
+  1 to 601. Folded into finding 4.
 
 ## Reproducing
 
@@ -176,5 +263,5 @@ pnpm --dir worker spike:batch      # batch proof economics
 pnpm --dir worker spike:hist       # prove five eras, 2021 -> 2024
 pnpm --dir worker prove-candles luna-2022 8
 pnpm --dir worker verify-onchain   # read candles back, compare to Ethereum
-forge test --root contracts        # 33 tests
+forge test --root contracts        # 44 tests
 ```

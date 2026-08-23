@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {ChartVerifier} from "../src/ChartVerifier.sol";
-import {ChartRegistry} from "../src/ChartRegistry.sol";
+import {ChartRegistry, IChartVerifier} from "../src/ChartRegistry.sol";
 import {GridGame} from "../src/GridGame.sol";
 
 /**
@@ -21,7 +21,9 @@ contract Deploy is Script {
         vm.startBroadcast(pk);
 
         ChartVerifier verifier = new ChartVerifier();
-        ChartRegistry registry = new ChartRegistry();
+        // The registry consults the verifier on every registration, so the wiring is a
+        // constructor argument rather than a later setter — it cannot be repointed.
+        ChartRegistry registry = new ChartRegistry(IChartVerifier(address(verifier)));
         GridGame game = new GridGame(registry);
 
         // Only these pools may produce candles. Without the allowlist, anyone could deploy a

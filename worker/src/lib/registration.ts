@@ -22,6 +22,16 @@ export interface RegistrationParams {
     invert: boolean;
     multipliers: number[];
     visibleSqrtPrices: string[];
+    /** the pool whose Swap events these candles were proven from */
+    pool: string;
+    /**
+     * The full candle series. ChartRegistry now derives merkleRoot, anchorSqrtPriceX96 and the
+     * visible series from these, after checking each one against ChartVerifier.provenPrice —
+     * so `merkleRoot` and `anchorSqrtPriceX96` above are kept only as an off-chain cross-check
+     * that the on-chain derivation agrees with ours.
+     */
+    blockNumbers: number[];
+    sqrtPrices: string[];
     hidden: {
         t: number;
         index: number;
@@ -63,6 +73,9 @@ export function registrationParams(win: any): RegistrationParams {
         // scaled by 1e4, flattened as t * priceBands + p
         multipliers: win.grid.map((c: any) => Math.round(c.multiplier * 1e4)),
         visibleSqrtPrices: candles.slice(0, visibleCount).map((c: any) => c.sqrtPriceX96.toString()),
+        pool: win.pool.address,
+        blockNumbers: candles.map((c: any) => c.blockNumber),
+        sqrtPrices: candles.map((c: any) => c.sqrtPriceX96.toString()),
         hidden: hidden.map((c: any, t: number) => ({
             t,
             index: c.index,

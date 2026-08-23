@@ -74,19 +74,25 @@ eras, **all verified**:
 
 **Continuity root count varies from 1 to 601 depending on the block**, because sparse checkpoints
 sit at fixed intervals. A block that lands on a checkpoint needs 1 root; one that doesn't may need
-hundreds. That's an **~8× cost difference** for otherwise identical proofs.
+hundreds. The root count itself is measured; the **~8× cost difference** that followed from it is
+not — it is the linear cost model `2.3e-5 + 2.9e-7 × roots` evaluated at both ends, and those two
+constants are hardcoded and unvalidated. Treat the spread as indicative, not billed.
 
-→ The indexer should prefer checkpoint-aligned blocks when sampling candles.
+→ The indexer should prefer checkpoint-aligned blocks when sampling candles. *(Conclusion stands —
+it follows from the measured root counts regardless of what the proofs actually cost.)*
 
-Even the worst case (601 roots, 1.97e-4 CTC) is negligible: the 10,000 CTC faucet grant covers
-roughly **50 million** worst-case historical proofs.
+Even the worst case (601 roots) looks negligible against a 10,000 CTC grant — but the "**roughly 50
+million** proofs" figure this section used to quote divides the grant by the same modelled cost, so
+it inherits the model, not a measurement.
 
 ## What this validates
 
 1. **The thesis holds.** A real Uniswap V3 swap from Ethereum mainnet can be proven inside
    Creditcoin and decoded into a verifiable price point.
-2. **Batching gives a clean 10× cost reduction** — one continuity proof serves ten candles. Chart
-   construction is economically trivial.
+2. **Batching lets one continuity proof serve ten candles**, verified in a single `verifyBatch`
+   call. That sharing is the real result. The "clean 10× cost reduction" once claimed here is not a
+   second finding — it is the cost model divided by itself, which yields the batch size by
+   construction and would read "10×" for any constants.
 3. **The precompile rejects tampered data**, so the security guard works.
 4. **No CTC needed to develop.** The `view` verification path means the whole proof pipeline can be
    built and tested before the faucet ever arrives. Only state-changing
@@ -94,16 +100,27 @@ roughly **50 million** worst-case historical proofs.
 
 ## Gotchas found (not in the docs)
 
-- **`waitUntilHeightAttested` is on `PrecompileChainInfoProvider`, not `ProofBuilder`** — the docs'
-  example (`proofBuilder.waitUntilHeightAttested`) is wrong. Attested height comes from
-  `chainInfo.PrecompileChainInfoProvider(rpc).getLatestAttestedHeightAndHash(chainKey)`.
-- **`ProofBuilder` only exposes `getProof` and `getBatchProof`.** Constructor is
-  `(chainKey, builderUrl, timeout?)`.
-- **`getBatchProof` returns a nested `Map<height, Map<txIndex, entry>>`** that must be flattened into
-  parallel arrays for `verifyBatch`.
+> **Corrected after re-checking against `@gluwa/usc-sdk@0.18.0` source.** Three items below were
+> written from the shape of the API as used, not from reading the SDK, and two of them were simply
+> wrong. Kept with strikethrough because this file is a dated research log, not a spec. The
+> surviving and revised findings live in
+> [`docs/ATTESTCOIN_INTEGRATION.md`](../ATTESTCOIN_INTEGRATION.md).
+
+- ~~**`waitUntilHeightAttested` is on `PrecompileChainInfoProvider`, not `ProofBuilder`** — the
+  docs' example (`proofBuilder.waitUntilHeightAttested`) is wrong.~~ **False.** It exists on both.
+  `ProofBuilder.waitUntilHeightAttested` is at `proof-provider/service/index.d.ts:158`. The real
+  finding is the inverse: the `PrecompileChainInfoProvider` implementation is marked *legacy* in its
+  own docstring (`chain-info/index.d.ts:212`), yet both shipped SDK examples call it anyway.
+- ~~**`ProofBuilder` only exposes `getProof` and `getBatchProof`.**~~ **False**, same reason — it
+  also exposes `waitUntilHeightAttested`. The constructor signature was right:
+  `(chainKey, builderUrl, timeout?)`, and that `timeout` defaults to **10 000 ms**, which is too
+  short for deep history.
+- ~~**`getBatchProof`'s nested `Map<height, Map<txIndex, entry>>` must be flattened** — not in the
+  docs.~~ The nesting is real (`proof-provider/index.d.ts:62`), but **it is documented**:
+  `examples/batch-proof-validation.ts` shows the exact flattening loop with a comment.
 - **Public Ethereum RPCs reject `getLogs` beyond ~128 blocks from head** as archive requests. Tested
   publicnode, drpc, 1rpc, merkle.io, payload.de — none allow it. **An archive provider
-  (Alchemy/Infura free tier) is required** to reach historical eras.
+  (Alchemy/Infura free tier) is required** to reach historical eras. *(Still stands.)*
 
 ## Price math (verified)
 
