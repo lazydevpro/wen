@@ -1,6 +1,11 @@
-# CTC outreach — drafted issues and intro
+# CTC outreach — drafted issues, questions, and intro
 
 Drafts only. **Nothing here has been posted.** Review, then file them yourself.
+
+Two halves: **A–D are bug reports** to file on GitHub, and the **Questions** section is for
+conversation. Every claim in both is something measured against the live chain or read out of the
+SDK source — nothing here is inferred. If someone pushes back on any of it, the reproduction is in
+the text.
 
 Every claim below was checked against `@gluwa/usc-sdk@0.18.0` source on 2026-08-21 — the version
 pinned in this repo since its first commit. Three further claims we previously held were withdrawn
@@ -168,6 +173,128 @@ can act on immediately.
 
 ---
 
+## Questions to ask — every one backed by something measured
+
+These are not bug reports. They are roadmap and infrastructure questions where the answer changes
+what wen can be built into. Each has evidence attached, so none of them is a guess.
+
+**Context worth knowing before the conversation:** the node reports
+`creditcoin3/v131.0/fc-rpc-2.0.0-dev` — `fc-rpc` is **Frontier**, the Substrate EVM layer. CC3 is
+not a Geth-family chain. That single fact explains three otherwise-confusing things: no
+`prevrandao` (BABE consensus rather than Ethereum PoS), `forge script` failing header validation,
+and block times of exactly 15.00s with zero variance (Substrate slots, not a gas-market target).
+
+```bash
+curl -s -X POST https://rpc.cc3-testnet.creditcoin.network -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}'
+```
+
+---
+
+### 1. Randomness — what should a game actually use?
+
+**Measured.** Inside a transaction (not an `eth_call` — that distinction matters, see below):
+
+| | |
+|---|---|
+| `block.prevrandao` | **0** |
+| `blockhash(block.number)` — self | **0** |
+| `blockhash(number - 1)` | real hash |
+| `blockhash(n-256)` / `n-257` | works / zero — standard 256 window |
+
+Chainlink VRF lists nine networks and Creditcoin is not among them. Creditcoin *does* appear in
+Chainlink's ecosystem directory, which is a partnership listing, not a coordinator deployment —
+easy to conflate.
+
+So `blockhash` is the only verified option, and wen depends on it: the chart is drawn from
+`keccak(blockhash(dealBlock), player, roundId)`.
+
+> **"My game picks its chart from `blockhash`, because `prevrandao` returns 0 and Chainlink VRF
+> isn't deployed here. Is that the recommended approach? Is `blockhash` a stability guarantee or
+> incidental to the current client? And is a VRF or randomness feature planned?"**
+
+**Have ready if pushed:** `prevrandao` returns 0 *from inside a transaction*. An `eth_call` probe
+is misleading here — it executes against an already-mined block, so `blockhash(block.number)`
+returns a real hash there and looks like it works.
+
+**Why it matters to us:** if `blockhash` ever returned zero, the seed collapses to
+`keccak(0, player, roundId)` — both knowable in advance — and every chart becomes predictable
+before paying. Not degraded fairness; the game simply ends.
+
+---
+
+### 2. Block time — it is our load time
+
+**Measured:** 40 blocks sampled, mean 15.00s, min 15s, max 15s. Not congestion; a fixed cadence.
+
+Click-to-chart is 16.7s, of which 15s is one block. There is no application-side fix left.
+
+> **"Blocks look like exactly 15s on CC3 testnet. Is that the same on mainnet, and is it likely to
+> change? My game has to wait one block before it can show anything, so block time is basically my
+> load time. Is there any way to know a transaction will be included before the block lands?"**
+
+Frame it as *"block time is my load time"*, not *"15s is too slow"*. Same information, invites help
+rather than defensiveness.
+
+---
+
+### 3. Account abstraction — the difference between two prompts and zero
+
+A round needs two signatures, and that is the structural floor: the player pays **before** seeing
+the chart and bets **after**. Information arrives in between; that gap is the game. The only way
+below two prompts is signature delegation.
+
+**Both routes are currently closed, measured:**
+
+| | status |
+|---|---|
+| ERC-4337 EntryPoint (v0.6 / v0.7 / v0.8 canonical addresses) | none deployed |
+| EIP-7702 (type-4 transaction) | `decode transaction failed` |
+
+The 7702 probe used a control to be sure the method was sound: an unfunded **type-2** fails on
+*funds* (so the node decodes it fine), while **type-4** fails on *decode* (the node does not know
+the format).
+
+**These are two different asks, and conflating them wastes the conversation:**
+
+**EIP-7702 is entirely theirs.** It adds a transaction type the node itself must parse, shipping
+with Prague/Pectra. No contract can add a transaction type — there is no deploying around it.
+
+> **"Is Pectra / EIP-7702 on the roadmap for CC3?"**
+
+**ERC-4337 is mostly ours, blocked on one node capability.** The contracts — EntryPoint, account
+factory, paymaster — we can deploy. The **bundler** is the problem: it must simulate every
+UserOperation before bundling, or it can be griefed into paying gas for operations that fail. That
+simulation needs tracing, and:
+
+```
+debug_traceCall          Method not found
+debug_traceTransaction   Method not found
+eth_createAccessList     Method not found
+txpool_content           OK          <- control: the RPC is healthy, these specifically are absent
+```
+
+> **"Three things on 4337: is there a `debug_traceCall`-enabled RPC endpoint, public or private?
+> Do you plan to deploy the canonical EntryPoint, or should apps deploy their own? And is any
+> bundler provider already supporting CC3?"**
+
+The canonical-address point is the one people miss: smart wallets look for the *canonical*
+EntryPoint. An app that deploys its own at a different address builds a closed system no existing
+wallet recognises.
+
+---
+
+### 4. Softer ones, for when the technical thread runs out
+
+- **"What have you seen this hackathon that surprised you?"** — cheap to answer, and people enjoy it.
+- **"What does the CEIP fast-track actually involve?"** — signals you are thinking past the deadline.
+- **"Is anyone else using attestation for history rather than live data?"** — if no, you are the
+  case study; if yes, you have found your peers.
+- **"What do proofs actually cost on mainnet?"** — and offer your gas distribution across 4,706
+  proven candles in exchange. Ours are modelled, not billed; theirs will be real.
+
+---
+
 ## Intro message (Discord / Telegram)
 
 Keep it short. The issues are the credential; the message just points at them.
@@ -198,3 +325,11 @@ Checked and false, or unverified — see [ATTESTCOIN_INTEGRATION.md](ATTESTCOIN_
   Quote root counts (measured); do not quote CTC amounts as measurements.
 - Not re-verified this pass: the 37-block attestation lag, the 462k–1.3M gas range, and the
   "docs say so in bold" attribution on `receiptStatus`.
+- **Do not say "Creditcoin has no randomness."** Say what was measured: `prevrandao` returns 0,
+  Chainlink VRF is not deployed, `blockhash` works. Whether a native source exists somewhere we
+  could not find is exactly what the question asks.
+- **Do not claim the precompile set was audited.** A `cast code` scan finds nothing because native
+  precompiles carry no bytecode — the known-good `0FD2` and `0FD3` also report `0x`. That scan
+  proves nothing either way.
+- **Do not say "4337 just needs a bundler."** It needs a bundler *and* the tracing RPCs a bundler
+  depends on, which are absent from the public endpoint. Those are different asks.
