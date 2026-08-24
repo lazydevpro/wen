@@ -71,7 +71,7 @@ body {
 }
 .brand { font-family: var(--display); font-size: 23px; font-weight: 500; letter-spacing: 0.5px;
          display: flex; align-items: center; gap: 9px; }
-.brand-mark { display: inline-flex; color: var(--blue); }
+.brand-mark { display: block; width: 21px; height: 21px; border-radius: 5px; }
 .topbar-right { display: flex; gap: 16px; align-items: center; }
 .stat { display: flex; flex-direction: column; align-items: flex-end; }
 .stat label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; color: var(--ink-faint); }
