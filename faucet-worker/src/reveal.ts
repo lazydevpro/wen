@@ -20,7 +20,7 @@ import type {Env} from './index';
 import {REVEALS, REVEAL_COUNT} from './reveals.generated';
 
 const GAME_ABI = [
-    'function rounds(uint256) view returns (address player, bytes32 windowId, uint8 state, uint64 startBlock, uint64 settledAt, uint128 ante, uint128 staked, uint128 paidOut)',
+    'function rounds(uint256) view returns (address player, bytes32 windowId, uint8 state, uint64 startBlock, uint64 settledBlock, uint128 ante, uint128 staked, uint128 maxPayout, uint128 paidOut)',
 ];
 
 /** Round.state in GridGame.sol — bets are locked from Settled onward. */

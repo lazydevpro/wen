@@ -9,6 +9,7 @@
  * edge cache and never spend Worker CPU.
  */
 import {FaucetDO} from './faucet-do';
+import {handleResolve} from './resolve';
 import {handleReveal} from './reveal';
 
 export {FaucetDO};
@@ -26,6 +27,9 @@ export interface Env {
 
     // secrets — `wrangler secret put`
     FAUCET_PRIVATE_KEY: string;
+    /** Separate from the faucet key on purpose: two code paths sharing one wallet means two
+     *  nonce sources, which is exactly how this project stalled runs before. */
+    KEEPER_PRIVATE_KEY: string;
     FAUCET_CODE: string;
 }
 
@@ -73,6 +77,15 @@ export default {
         }
 
         // keyed by windowId (0x + 64 hex) — the client never sees window ids like "luna-2022-s3"
+        // Keeper: settles the payout so the player does not sign a third time. Best effort —
+        // the client falls back to letting them resolve it themselves.
+        if (url.pathname === '/api/resolve' && request.method === 'POST') {
+            let payload: any = {};
+            try { payload = await request.json(); } catch {}
+            const {status, body} = await handleResolve(env, String(payload.roundId ?? ''));
+            return json(status, body);
+        }
+
         const revealMatch = url.pathname.match(/^\/api\/reveal\/(0x[0-9a-fA-F]{64})$/);
         if (revealMatch) {
             const {status, body} = await handleReveal(env, revealMatch[1], url.searchParams.get('roundId'));

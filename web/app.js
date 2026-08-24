@@ -1136,8 +1136,12 @@ async function lockIn() {
         state.reveal = await fetchReveal(state.win.windowId, state.roundId);
         txClose();
         setPhase(PHASE.REVEALING);
-        await animateReveal();
-        await resolveOnChain();
+        const won = await animateReveal();
+        // The reveal already told the player exactly what they won — the on-chain resolve only
+        // moves the money. Waiting for it would put a ~30s "settling…" screen between the
+        // outcome and the result, so it runs behind the result instead.
+        settleInBackground();
+        finish(won);
     } catch (e) {
         // A failed settle leaves the round Dealt on-chain with the ante committed. Say so
         // plainly and give a way out, rather than stranding the player on a dead table.
@@ -1201,35 +1205,73 @@ async function animateReveal() {
         }
     }
     await new Promise((r) => setTimeout(r, 600));
+    return running;
 }
 
-/** Resolution is permissionless — the client does it so the whole loop is visible on-chain. */
-async function resolveOnChain() {
-    const h = state.reveal.hidden;
-    const btn = $('btnLockIn');
-    btn.disabled = true;
-    btn.textContent = 'writing the result on-chain…';
+/**
+ * Settles the payout without blocking the player.
+ *
+ * resolveRound is permissionless — it checks Merkle proofs, not callers — so the keeper can do
+ * it and the player never signs a third time. Two blocks pass before the money lands (one for
+ * the resolve to be legal, one to mine it), which is why this must not be awaited.
+ *
+ * Best effort, never the only path: if the keeper is down the round stays claimable by anyone,
+ * including the player, and the claim affordance appears on the result screen.
+ */
+async function settleInBackground() {
+    const roundId = state.roundId;
     try {
-        // Resolution has to land strictly after the block the bets settled in — otherwise one
-        // transaction could deal, bet and collect, and the decision clock would mean nothing.
+        const r = await fetch('/api/resolve', {
+            method: 'POST',
+            headers: {'content-type': 'application/json'},
+            body: JSON.stringify({roundId: String(roundId)}),
+        });
+        if (!r.ok) throw new Error('keeper declined');
+        await refreshCredit();
+        return;
+    } catch (e) {
+        offerManualClaim(roundId);
+    }
+}
+
+/** A keeper outage must never look like a lost round. The money is still the player's. */
+function offerManualClaim(roundId) {
+    const box = $('resultActions') || $('btnAgain')?.parentElement;
+    if (!box || box.querySelector('.claim-fallback')) return;
+    const b = document.createElement('button');
+    b.className = 'ghost claim-fallback';
+    b.textContent = 'claim winnings manually';
+    b.onclick = async () => {
+        b.disabled = true;
+        b.textContent = 'claiming…';
+        try {
+            await claimManually(roundId);
+            b.remove();
+        } catch (e) {
+            b.disabled = false;
+            b.textContent = 'claim winnings manually';
+            toast('claim failed: ' + explain(e));
+        }
+    };
+    box.appendChild(b);
+}
+
+/** The player signs it themselves. Same call the keeper makes; only the payer differs. */
+async function claimManually(roundId) {
+    const h = state.reveal.hidden;
+    try {
         await nextBlock(state.settleBlock);
         const tx = await state.game.resolveRound(
-            state.roundId,
+            roundId,
             h.map((c) => c.index),
             h.map((c) => c.b),
             h.map((c) => BigInt(c.sqrtPriceX96)),
             h.map((c) => c.proof),
         );
-        const rcpt = await tx.wait();
-        const ev = rcpt.logs
-            .map((l) => { try { return state.game.interface.parseLog(l); } catch { return null; } })
-            .find((p) => p && p.name === 'RoundResolved');
-        const payout = ev ? Number(formatEther(ev.args.payout)) : 0;
+        await tx.wait();
         await refreshCredit();
-        finish(payout);
-    } catch (e) {
-        toast('resolve failed: ' + explain(e));
-        finish(0);
+    } finally {
+        /* caller reports failure; the round stays claimable either way */
     }
 }
 
