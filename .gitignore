@@ -38,3 +38,8 @@ worker/data/
 worker/data/windows/
 worker/data/reveals/
 worker/data/manifest.json
+
+# Notes that live with the project but must never ship. The repo is read by the people some of
+# these notes are about, so this is a directory rather than a per-file rule: a new private note
+# should not require remembering to add a line here.
+docs/private/
