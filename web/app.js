@@ -68,6 +68,10 @@ const LEGACY_GAMES = [
 ];
 const LEGACY_ABI = ['function balances(address) view returns (uint256)', 'function withdraw(uint256)'];
 const REGISTRY = '0xBCf9D65e6eb421B6dbf2CaEDbB21bCcBD0337dC5';
+const VERIFIER = '0xE64f8b159FC22F9B0B1ca4980362eB5765cAb0f3';
+const POOL = '0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640';
+const EXPLORER = 'https://creditcoin-testnet.blockscout.com';
+const VERIFIER_ABI = ['function candleCount(address) external view returns (uint256)'];
 const REGISTRY_ABI = [
     'function windowCount() external view returns (uint256)',
     'function windowIds(uint256) external view returns (bytes32)',
@@ -78,6 +82,9 @@ const GAME_ABI = [
     'function withdraw(uint256 amount) external',
     'function balances(address) external view returns (uint256)',
     'function maxBet() external view returns (uint256)',
+    // read by the lobby strip
+    'function bankroll() external view returns (uint256)',
+    'function nextRoundId() external view returns (uint256)',
     'function maxRoundExposure() external view returns (uint256)',
     'function DECISION_BLOCKS() external view returns (uint256)',
     'function startRound(uint128 ante) external payable returns (uint256)',
@@ -550,6 +557,7 @@ async function connect() {
     await refreshCredit();
     refreshFaucet();
     show('screenLobby');
+    loadHudStats();
     checkLegacyCredit().catch(() => {});
 }
 
@@ -648,7 +656,7 @@ function renderAnteGrid() {
         };
         g.appendChild(b);
     });
-    $('decisionHint').textContent = `${DECISION_SECONDS} seconds`;
+    $('decisionHint').textContent = `${DECISION_SECONDS}s`;
 }
 
 // ─────────────────────────────────────────────────────── window + reveal
@@ -687,6 +695,36 @@ async function deriveWindow(roundId, dealBlockHash) {
         return await reg.windowIds(seed % n);
     } catch (e) {
         return await awaitWindow(roundId);
+    }
+}
+
+/**
+ * The numbers along the top of the lobby, read live from chain.
+ *
+ * These are not decoration. "4,706 candles proven" is the entire claim of this project, and it is
+ * one view call away from being checked — so it is shown as a fact the player can verify rather
+ * than a sentence they have to believe. Failures are silent: a dead RPC should dim the strip, not
+ * block someone from playing.
+ */
+async function loadHudStats() {
+    const link = $('proofLink');
+    if (link) link.href = `${EXPLORER}/address/${VERIFIER}`;
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    try {
+        const reg = new Contract(REGISTRY, REGISTRY_ABI, state.provider);
+        const ver = new Contract(VERIFIER, VERIFIER_ABI, state.provider);
+        const [candles, windows, bankroll, rounds] = await Promise.all([
+            ver.candleCount(POOL),
+            reg.windowCount(),
+            state.game.bankroll(),
+            state.game.nextRoundId(),
+        ]);
+        set('statCandles', Number(candles).toLocaleString());
+        set('statWindows', Number(windows).toLocaleString());
+        set('statBankroll', Math.round(Number(formatEther(bankroll))).toLocaleString());
+        set('statRounds', Math.max(0, Number(rounds) - 1).toLocaleString());
+    } catch (e) {
+        ['statCandles', 'statWindows', 'statBankroll', 'statRounds'].forEach((id) => set(id, '—'));
     }
 }
 
@@ -866,6 +904,7 @@ async function deal() {
         toast(explain(e));
         setPhase(PHASE.IDLE);
         show('screenLobby');
+    loadHudStats();
     }
 }
 
@@ -1156,6 +1195,7 @@ function showDeadEnd(message) {
     txError(message, () => {
         setPhase(PHASE.IDLE);
         show('screenLobby');
+    loadHudStats();
     });
 }
 

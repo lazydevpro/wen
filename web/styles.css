@@ -25,9 +25,13 @@
     --win: #2fd07a;
     --lose: #ff4d4d;
 
-    --radius: 12px;
-    --radius-lg: 16px;
-    --pill: 9999px;
+    /* angular by default: pill-shaped controls read as a web app, not a console */
+    --radius: 2px;
+    --radius-lg: 3px;
+    --pill: 2px;
+    /* the cut-corner used across panels, buttons and chips */
+    --cut: 10px;
+    --cut-sm: 7px;
     --display: 'Tektur', ui-monospace, monospace;
     --sans: 'Inter', system-ui, -apple-system, sans-serif;
     --mono: 'Source Code Pro', ui-monospace, monospace;
@@ -256,7 +260,6 @@ button { font-family: var(--sans); cursor: pointer; }
 .center { text-align: center; }
 .sub.small { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
 
-.lobby { display: grid; grid-template-columns: 1fr; gap: 16px; max-width: 560px; margin: 28px auto; }
 
 .ante-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 4px; }
 .ante-chip { background: var(--sunken); border: 1px solid var(--hairline-strong); border-radius: 10px;
@@ -416,3 +419,132 @@ blockquote.skel { color: transparent; user-select: none; min-height: 3.4em; bord
     transition: transform 0.62s cubic-bezier(0.22, 0.9, 0.24, 1), opacity 0.55s ease 0.1s;
     opacity: 0;
 }
+
+
+/* ═══════════════════════ lobby HUD ═══════════════════════
+   Reads as a game console rather than a settings page: angular cut corners, corner brackets,
+   mono micro-labels, and a live strip along the top. The reference art for this was saturated
+   cyan; we stay on OUR palette, because blue is chrome here and green/red are reserved for
+   outcomes. Borrowing the layout language without the colour keeps that rule intact. */
+
+.hud { max-width: 1320px; margin: 0 auto; width: 100%; padding-bottom: 24px; }
+
+/* --- top strip: live chain numbers, the whole argument for the project --- */
+.hud-strip {
+    display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
+    padding: 13px 22px; margin-bottom: 16px;
+    background: linear-gradient(90deg, var(--blue-wash), transparent 60%), var(--panel);
+    border: 1px solid var(--hairline);
+    border-left: 2px solid var(--blue);
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+.hud-stat { display: flex; flex-direction: column; gap: 2px; }
+.hud-stat label { font-family: var(--mono); font-size: 9px; letter-spacing: 1.2px;
+                  text-transform: uppercase; color: var(--ink-faint); }
+.hud-stat span { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+.hud-stat em { font-style: normal; font-size: 10px; color: var(--ink-faint); margin-left: 3px; }
+.hud-live { margin-left: auto; display: flex; align-items: center; gap: 7px;
+            font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px; color: var(--ink-mute); }
+.hud-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--blue);
+              box-shadow: 0 0 0 0 var(--blue-edge); animation: ping 2.4s ease-out infinite; }
+@keyframes ping {
+    0%   { box-shadow: 0 0 0 0 rgba(73,118,255,0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(73,118,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(73,118,255,0); }
+}
+
+/* --- three columns; the middle one is what you came to do --- */
+.hud-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.hud-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1080px) { .hud-grid { grid-template-columns: minmax(0, 1fr); }
+                             .hud-main { order: -1; } }
+
+/* --- the console panel: cut corner + bracket ticks --- */
+.panel.bracket {
+    position: relative;
+    clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
+}
+.panel.bracket::before, .panel.bracket::after {
+    content: ''; position: absolute; width: 11px; height: 11px; pointer-events: none;
+    border-color: var(--blue-edge); border-style: solid; border-width: 0;
+}
+.panel.bracket::before { top: 7px; left: 7px; border-top-width: 1px; border-left-width: 1px; }
+.panel.bracket::after { bottom: 7px; right: 7px; border-bottom-width: 1px; border-right-width: 1px; }
+.tag.dim { color: var(--ink-faint); opacity: 0.7; }
+
+/* --- centre: stake + the button --- */
+.start-panel { background: linear-gradient(180deg, var(--blue-wash), transparent 42%), var(--panel); }
+.start-btn { margin-top: 4px; letter-spacing: 0.3px; }
+.start-btn:not(:disabled) { box-shadow: 0 0 0 1px var(--blue-edge), 0 8px 30px -10px rgba(73,118,255,0.7); }
+.start-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 10px; }
+.start-meta > div { background: var(--sunken); border-left: 1px solid var(--hairline-strong);
+                    padding: 8px 10px; }
+.start-meta label { display: block; font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.1px;
+                    text-transform: uppercase; color: var(--ink-faint); }
+.start-meta span { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+
+/* --- how a round runs --- */
+.steps { list-style: none; display: flex; flex-direction: column; gap: 11px; margin-top: 4px; }
+.steps li { display: flex; gap: 12px; align-items: flex-start; }
+.steps b { font-family: var(--mono); font-size: 11px; color: var(--blue); padding-top: 2px;
+           min-width: 20px; }
+.steps span { color: var(--ink-mute); font-size: 12.5px; line-height: 1.62; }
+
+/* --- the deck: era chips --- */
+.era-list { list-style: none; display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.era-list li { font-family: var(--mono); font-size: 10px; color: var(--ink-mute);
+               border: 1px solid var(--hairline-strong); border-radius: 3px; padding: 3px 7px; }
+
+/* --- payout ladder: label, frequency bar, price. The bar is the real hit rate, so the trade
+       between "pays little, lands often" and "pays 250x, almost never" is visible rather than
+       described. --- */
+.ladder { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 10px; }
+.ladder > div { display: grid; grid-template-columns: 74px minmax(0, 1fr) 38px;
+                align-items: center; gap: 8px; }
+.ladder em { font-style: normal; font-family: var(--mono); font-size: 9.5px;
+             color: var(--ink-mute); white-space: nowrap; }
+.ladder i { height: 14px; width: var(--w); min-width: 3px; display: block;
+            background: linear-gradient(90deg, var(--blue), rgba(73,118,255,0.15));
+            border-left: 2px solid var(--blue); }
+.ladder b { font-family: var(--mono); font-size: 11.5px; text-align: right; }
+
+/* --- proof --- */
+.proof-panel { border-left: 2px solid var(--blue); }
+.proof-link { display: inline-block; margin-top: 10px; font-family: var(--mono); font-size: 11px;
+              color: var(--blue); text-decoration: none; }
+.proof-link:hover { text-decoration: underline; }
+
+/* --- two ways to play: the mode switch used to be discoverable only mid-round, which meant most
+       players never found the simpler game at all --- */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+@media (max-width: 620px) { .modes { grid-template-columns: 1fr; } }
+.mode-card { background: var(--sunken); border: 1px solid var(--hairline); padding: 12px 13px;
+             clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px)); }
+.mode-card:hover { border-color: var(--blue-edge); }
+.mode-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+             margin-bottom: 7px; }
+.mode-head b { font-family: var(--display); font-size: 14px; font-weight: 500; }
+.mode-max { font-family: var(--mono); font-size: 10px; color: var(--blue); }
+.mode-card p { color: var(--ink-mute); font-size: 12px; line-height: 1.6; }
+
+/* secondary panel-head captions are commentary; drop them before they wrap on narrow screens */
+@media (max-width: 480px) { .tag.dim { display: none; } }
+
+/* ═══ angular controls ═══
+   Clip rather than round. Panels already cut their corners; leaving the buttons and chips as
+   lozenges made the two languages fight, which is what "not sitting well" was pointing at. */
+.primary, .start-btn {
+    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut),
+                       100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+}
+.ghost, .ante-chip, .dir-btn, .mode-btn, .eyebrow {
+    clip-path: polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm),
+                       100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm)));
+}
+/* a clip cuts the border off with the corner, so the selected chip needs its own inner outline */
+.ante-chip.on { box-shadow: inset 0 0 0 1px var(--blue); }
+.mode-switch { clip-path: polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm),
+                                  100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
+/* these are meant to be round and must survive the token change */
+.hud-live i, .eyebrow::before { border-radius: 50% !important; clip-path: none !important; }
+.brand-mark { border-radius: 4px; }

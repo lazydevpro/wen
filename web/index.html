@@ -59,42 +59,142 @@
 
 <!-- ─────────────────────────── lobby / ante ─────────────────────────── -->
 <section id="screenLobby" class="screen">
-  <div class="lobby">
-    <div class="panel faucet-panel" id="faucetPanel">
-      <div class="panel-head">
-        <span class="tag">testnet faucet</span>
-        <span class="faucet-left" id="faucetLeft"></span>
+  <div class="hud">
+
+    <!-- Live from chain, not decoration. Every number here is one view call and is the whole
+         argument for the project: the deck is provably real. -->
+    <div class="hud-strip">
+      <div class="hud-stat"><label>candles proven</label><span id="statCandles">····</span></div>
+      <div class="hud-stat"><label>charts in the deck</label><span id="statWindows">···</span></div>
+      <div class="hud-stat"><label>house bankroll</label><span id="statBankroll">····</span><em>CTC</em></div>
+      <div class="hud-stat"><label>rounds played</label><span id="statRounds">···</span></div>
+      <div class="hud-live"><i></i>CC3 TESTNET</div>
+    </div>
+
+    <div class="hud-grid">
+
+      <!-- ── left column ── -->
+      <aside class="hud-col">
+        <div class="panel bracket faucet-panel" id="faucetPanel">
+          <div class="panel-head">
+            <span class="tag">testnet faucet</span>
+            <span class="faucet-left" id="faucetLeft"></span>
+          </div>
+          <p class="muted">
+            No CTC? <strong>20 every 24h</strong>. Gas is covered, so a brand-new wallet works.
+          </p>
+          <button id="btnFaucet" class="ghost wide-sm">send me 20 CTC</button>
+          <div id="faucetResult" class="guess-result"></div>
+        </div>
+
+        <div class="panel bracket" id="legacyPanel" hidden>
+          <div class="panel-head"><span class="tag">old winnings found</span></div>
+          <p class="muted">
+            <strong><span id="legacyAmount">0</span> CTC</strong> is sitting on an earlier version
+            of this game. Still yours.
+          </p>
+          <button id="btnLegacy" class="ghost wide-sm">recover to wallet</button>
+        </div>
+
+        <div class="panel bracket">
+          <div class="panel-head"><span class="tag">the deck</span></div>
+          <p class="muted">
+            21 eras of Ethereum, <strong>May 2021 → Nov 2024</strong>. You will not be told which
+            one you drew.
+          </p>
+          <ul class="era-list">
+            <li>peak gas</li><li>the London fork</li><li>the ATH</li><li>Luna</li>
+            <li>the lender freezes</li><li>the Merge</li><li>FTX</li><li>capitulation</li>
+            <li>the depeg</li><li>Shapella</li><li>the ETFs</li><li>the election</li>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- ── centre column: the thing you came to do ── -->
+      <div class="hud-col hud-main">
+        <div class="panel bracket start-panel">
+          <div class="panel-head">
+            <span class="tag">your opening stake</span>
+            <span class="tag dim">minimum, not a fee</span>
+          </div>
+
+          <div class="ante-grid" id="anteGrid"></div>
+
+          <button id="btnDeal" class="primary wide start-btn" disabled>
+            <span>show me a chart</span>
+          </button>
+
+          <div class="start-meta">
+            <div><label>clock</label><span id="decisionHint">45s</span></div>
+            <div><label>signatures</label><span>2</span></div>
+            <div><label>settled by</label><span>keeper</span></div>
+          </div>
+
+          <p class="fineprint">
+            Your stake counts toward your bets, so an honest player pays nothing extra. Walk away
+            once the chart is up and it is forfeit — that is what stops anyone looking it up.
+          </p>
+        </div>
+
+        <div class="panel bracket">
+          <div class="panel-head">
+            <span class="tag">two ways to play</span>
+            <span class="tag dim">switch any time, same chart</span>
+          </div>
+          <div class="modes">
+            <div class="mode-card">
+              <div class="mode-head"><b>the grid</b><span class="mode-max">up to 250×</span></div>
+              <p>8 × 12 cells over the future. Mark where you think the price goes and every cell
+                 the real path crosses pays. Harder, and the only way to the big multipliers.</p>
+            </div>
+            <div class="mode-card">
+              <div class="mode-head"><b>up / down</b><span class="mode-max">1.70× / 1.90×</span></div>
+              <p>One call: does it close higher or lower than the last known price? Less to think
+                 about, less to win. Down pays more because the pool closes up 53.3% of the time.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel bracket">
+          <div class="panel-head"><span class="tag">how a round runs</span></div>
+          <ol class="steps">
+            <li><b>01</b><span>You stake. The chart is picked from the hash of that very block, so nobody — including us — knows it while you are paying.</span></li>
+            <li><b>02</b><span>A real slice of Ethereum appears with one riddle. 45 seconds to read it and place your bets.</span></li>
+            <li><b>03</b><span>The hidden candles are revealed with Merkle proofs against a root committed before you played.</span></li>
+          </ol>
+        </div>
       </div>
-      <p class="muted">
-        No CTC? Grab some. <strong>20 CTC every 24h</strong> — enough for a few hands.
-        Gas is paid for you, so a brand-new wallet works.
-      </p>
-      <button id="btnFaucet" class="ghost wide-sm">send me 20 CTC</button>
-      <div id="faucetResult" class="guess-result"></div>
-    </div>
 
-    <div class="panel" id="legacyPanel" hidden>
-      <div class="panel-head"><span class="tag">old winnings found</span></div>
-      <p class="muted">
-        You have <strong><span id="legacyAmount">0</span> CTC</strong> sitting on an earlier
-        version of this table. It's still yours — pull it back to your wallet.
-      </p>
-      <button id="btnLegacy" class="ghost wide-sm">recover to wallet</button>
-    </div>
+      <!-- ── right column ── -->
+      <aside class="hud-col">
+        <div class="panel bracket">
+          <div class="panel-head"><span class="tag">payout ladder</span></div>
+          <p class="muted">Bar length is how often it actually lands, measured across all 120 charts.</p>
+          <div class="ladder">
+            <div><em>on the line</em><i style="--w:100%"></i><b>1×</b></div>
+            <div><em>one band out</em><i style="--w:49%"></i><b>7×</b></div>
+            <div><em>two bands</em><i style="--w:25%"></i><b>25×</b></div>
+            <div><em>three</em><i style="--w:23%"></i><b>50×</b></div>
+            <div><em>four</em><i style="--w:9%"></i><b>98×</b></div>
+            <div><em>the far edge</em><i style="--w:5%"></i><b>250×</b></div>
+          </div>
+          <p class="fineprint">
+            Priced from measured history, so no cell is ever worth more than it should be.
+          </p>
+        </div>
 
-    <div class="panel ante-panel">
-      <div class="panel-head"><span class="tag">your opening stake</span></div>
-      <p class="muted">
-        Your opening stake is a <strong>minimum</strong>, not a fee — it counts toward your bets.
-        It's paid straight from your wallet when you start. Winnings collect as credit and draw
-        down first on later hands; withdraw them any time from the top bar.
-      </p>
-      <div class="ante-grid" id="anteGrid"></div>
-      <button id="btnDeal" class="primary wide" disabled>show me a chart</button>
-      <p class="fineprint">
-        Once the chart appears you have <strong id="decisionHint">45 seconds</strong> to place your bets.
-        Walk away and it is forfeit — that is what stops anyone looking the chart up.
-      </p>
+        <div class="panel bracket proof-panel">
+          <div class="panel-head"><span class="tag">why it is real</span></div>
+          <p class="muted">
+            Every candle is a Uniswap V3 swap proven onto Creditcoin through Attestcoin. A chart
+            of invented history <strong>cannot be registered</strong> — the contract rejects it.
+          </p>
+          <a class="proof-link" id="proofLink" href="#" target="_blank" rel="noopener">
+            verify on the explorer →
+          </a>
+        </div>
+      </aside>
+
     </div>
   </div>
 </section>
