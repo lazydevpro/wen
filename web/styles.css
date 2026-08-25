@@ -128,7 +128,7 @@ blockquote {
 .guess-row { display: flex; gap: 8px; margin-top: 10px; }
 .guess-row input {
     flex: 1; background: var(--sunken); border: 1px solid var(--hairline-strong);
-    border-radius: 8px; padding: 9px 11px; color: var(--ink); font-family: var(--mono); font-size: 12px;
+    border-radius: 2px; padding: 9px 11px; color: var(--ink); font-family: var(--mono); font-size: 12px;
 }
 .guess-row input:focus { outline: none; border-color: var(--blue); }
 .guess-result { font-size: 11px; margin-top: 9px; min-height: 16px; font-family: var(--mono); }
@@ -139,7 +139,7 @@ blockquote {
 
 .bet-list { max-height: 132px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .bet-row { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono);
-           font-size: 11px; padding: 7px 10px; background: var(--blue-wash); border-radius: 7px; }
+           font-size: 11px; padding: 7px 10px; background: var(--blue-wash); border-radius: 2px; }
 .bet-row b { color: var(--blue); font-weight: 600; }
 .bet-row button { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-family: var(--mono); }
 .muted { color: var(--ink-mute); font-size: 12px; line-height: 1.6; }
@@ -150,7 +150,7 @@ blockquote {
 .stepper span { min-width: 34px; text-align: center; font-family: var(--mono); font-weight: 600; }
 
 .totals { display: flex; gap: 10px; margin: 12px 0; }
-.totals > div { flex: 1; background: var(--sunken); border-radius: 9px; padding: 10px 12px; }
+.totals > div { flex: 1; background: var(--sunken); border-radius: 2px; padding: 10px 12px; }
 .totals label { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; color: var(--ink-faint); }
 .totals span { font-family: var(--mono); font-size: 17px; font-weight: 600; }
 .totals .win { color: var(--win); }
@@ -185,7 +185,7 @@ button { font-family: var(--sans); cursor: pointer; }
 .price-now span { font-family: var(--mono); font-size: 26px; font-weight: 600; }
 
 .canvas-wrap { position: relative; width: 100%; flex: 1 1 auto; min-height: 0; }
-#chart { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 10px; }
+#chart { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 2px; }
 
 .grid-overlay { position: absolute; top: 0; right: 0; bottom: 0; width: 58%; display: grid; }
 .cell {
@@ -229,14 +229,14 @@ button { font-family: var(--sans); cursor: pointer; }
 .result-era { color: var(--ink-mute); font-size: 12.5px; margin: 14px 0 22px; line-height: 1.65; }
 .breakdown { text-align: left; font-family: var(--mono); font-size: 11px; display: flex;
              flex-direction: column; gap: 6px; margin-bottom: 26px; }
-.breakdown div { display: flex; justify-content: space-between; padding: 7px 11px; background: var(--sunken); border-radius: 7px; }
+.breakdown div { display: flex; justify-content: space-between; padding: 7px 11px; background: var(--sunken); border-radius: 2px; }
 .breakdown .w { color: var(--win); }
 .breakdown .l { color: var(--lose); }
 
 /* ───────────────────────── toast ───────────────────────── */
 .toast {
     position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(80px);
-    background: var(--canvas-soft); border: 1px solid var(--hairline-strong); border-radius: 10px;
+    background: var(--canvas-soft); border: 1px solid var(--hairline-strong); border-radius: 2px;
     padding: 12px 20px; font-size: 12px; transition: 0.3s; z-index: 90; opacity: 0;
 }
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
@@ -245,7 +245,7 @@ button { font-family: var(--sans); cursor: pointer; }
 .lb { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--hairline); text-align: left; }
 .lb ol { list-style: none; counter-reset: lb; margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
 .lb li { counter-increment: lb; display: flex; justify-content: space-between; align-items: center;
-         font-family: var(--mono); font-size: 11px; padding: 7px 11px; background: var(--sunken); border-radius: 7px; }
+         font-family: var(--mono); font-size: 11px; padding: 7px 11px; background: var(--sunken); border-radius: 2px; }
 .lb li::before { content: counter(lb); color: var(--ink-faint); margin-right: 10px; min-width: 14px; }
 .lb li span:first-of-type { flex: 1; color: var(--ink-mute); }
 .lb li b { color: var(--win); }
@@ -262,7 +262,7 @@ button { font-family: var(--sans); cursor: pointer; }
 
 
 .ante-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 4px; }
-.ante-chip { background: var(--sunken); border: 1px solid var(--hairline-strong); border-radius: 10px;
+.ante-chip { background: var(--sunken); border: 1px solid var(--hairline-strong); border-radius: 2px;
              padding: 14px 4px; color: var(--ink); display: flex; flex-direction: column;
              align-items: center; gap: 2px; transition: 0.15s; font-family: var(--mono); }
 .ante-chip b { font-size: 17px; font-weight: 600; }
@@ -311,7 +311,7 @@ button { font-family: var(--sans); cursor: pointer; }
 .mode-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .dir-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 4px; }
-.dir-btn { background: var(--sunken); border: 1px solid var(--hairline-strong); border-radius: 10px;
+.dir-btn { background: var(--sunken); border: 1px solid var(--hairline-strong); border-radius: 2px;
            padding: 16px 4px; color: var(--ink); display: flex; flex-direction: column;
            align-items: center; gap: 4px; transition: 0.15s; font-family: var(--mono); }
 .dir-btn b { font-size: 15px; font-weight: 600; }
@@ -371,9 +371,9 @@ button { font-family: var(--sans); cursor: pointer; }
         linear-gradient(100deg, transparent 40%, rgba(255,255,255,0.05) 50%, transparent 60%);
     background-size: 100% 100%, 200% 100%;
     animation: shimmer 1.6s linear infinite;
-    border-radius: 8px;
+    border-radius: 2px;
 }
-blockquote.skel { color: transparent; user-select: none; min-height: 3.4em; border-radius: 6px; }
+blockquote.skel { color: transparent; user-select: none; min-height: 3.4em; border-radius: 2px; }
 @media (prefers-reduced-motion: reduce) {
     .skel-fill, .canvas-wrap.skel::before { animation: none; }
 }

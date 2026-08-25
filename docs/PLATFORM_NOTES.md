@@ -54,20 +54,21 @@ cadence rather than load.
 It is the floor on anything that must wait for confirmation. wen's click-to-chart is 16.7s, of
 which 15s is the block and ~1.7s is submission plus lookups.
 
-## Account abstraction is unavailable
+## Account abstraction: 7702 is theirs, 4337 is ours
 
 | | status |
 |---|---|
-| ERC-4337 EntryPoint, v0.6 / v0.7 / v0.8 canonical addresses | none deployed |
-| EIP-7702 type-4 transaction | `decode transaction failed` |
+| ERC-4337 EntryPoint, v0.6 / v0.7 / v0.8 canonical addresses | none deployed — but deployable by anyone |
+| EIP-7702 type-4 transaction | `decode transaction failed` — needs a node upgrade |
 
 The 7702 probe carries its own control: an unfunded **type-2** fails on *funds* — so the node
 decodes it fine — while **type-4** fails on *decode*, meaning the node does not know the format.
 7702 ships with Prague/Pectra and is a node-level change; no contract can add a transaction type.
 
-4337 is different: the contracts (EntryPoint, account factory, paymaster) are deployable by anyone,
-but a bundler must simulate every UserOperation before bundling or it can be griefed into paying
-gas for operations that fail. That simulation needs tracing, and the public RPC has none of it:
+4337 is different, and the first version of this note got it wrong. The contracts (EntryPoint,
+account factory, paymaster) are deployable by anyone, but a bundler must simulate every
+UserOperation before bundling or it can be griefed into paying gas for operations that fail. That
+simulation needs tracing, and the **public** RPC has none of it:
 
 ```
 debug_traceCall          Method not found
@@ -76,9 +77,23 @@ eth_createAccessList     Method not found
 txpool_content           OK          <- control: the endpoint is healthy
 ```
 
-Consequence for this project: two wallet prompts per round is the floor. The player pays before
-seeing the chart and bets after; information arrives in between, and only signature delegation
-could collapse that.
+**That is a property of the public endpoint, not the chain.** Per Creditcoin's
+[RPC guide](https://docs.creditcoin.org/rpc-guide#how-to-enable-evm-tracing), tracing is available
+on a node you run yourself — add `--ethapi=debug,trace,txpool` to the `gluwa/creditcoin3` docker
+run, keep `--pruning archive` so historical traces resolve, and point tooling at that endpoint. It
+exposes `debug_traceCall`, `debug_traceTransaction`, `debug_traceBlockBy*`, `trace_filter` and the
+txpool methods. Their docs advise against enabling it on validators or public RPCs because
+replaying execution is CPU and IO intensive — which is why it is off by default rather than
+missing.
+
+So 4337 is **not blocked on Creditcoin**; it is blocked on running an archive node with tracing
+plus a bundler service. Real ops, but ours to decide rather than theirs to ship.
+
+Consequence for this project: two wallet prompts per round is the floor **today**. The player pays
+before seeing the chart and bets after; information arrives in between, and only signature
+delegation collapses that. 7702 would be the cheap route and is not available. 4337 is available
+at the cost of running an archive node, a bundler and an EntryPoint — worth revisiting if the game
+gets real usage, hard to justify for a hackathon.
 
 ## Foundry
 
