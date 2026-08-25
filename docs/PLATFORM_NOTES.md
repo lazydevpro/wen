@@ -89,11 +89,29 @@ missing.
 So 4337 is **not blocked on Creditcoin**; it is blocked on running an archive node with tracing
 plus a bundler service. Real ops, but ours to decide rather than theirs to ship.
 
-Consequence for this project: two wallet prompts per round is the floor **today**. The player pays
-before seeing the chart and bets after; information arrives in between, and only signature
-delegation collapses that. 7702 would be the cheap route and is not available. 4337 is available
-at the cost of running an archive node, a bundler and an EntryPoint — worth revisiting if the game
-gets real usage, hard to justify for a hackathon.
+Consequence for this project: **two wallet prompts per round is the floor, and we are choosing to
+stay there.** The player pays before seeing the chart and bets after; information arrives in
+between, and only signature delegation collapses that.
+
+Three routes, and why each is or is not taken:
+
+- **EIP-7702 — the one we want, not yet available.** The EOA becomes the account, so a delegated
+  session spends straight from the wallet. No pre-funding, no commitment.
+- **ERC-4337 — available, not worth it.** The canonical CREATE2 deployer is present at
+  `0x4e59…4956C`, so the EntryPoint could go at its canonical address and existing smart wallets
+  would recognise it. But bundlers need `debug_traceCall` with a JS tracer and this is Frontier,
+  not Geth — untested, and Fantom is precedent for a client that had the method but still could
+  not run bundlers. Cost is ~$60–120/mo self-hosted plus ops. A bundler only we use is a relayer
+  with extra steps.
+- **Custom session keys — rejected on product grounds.** A session key cannot touch the player's
+  wallet balance, only credit already inside the contract, because the key is deliberately weak.
+  That forces a deposit before the first round. We removed exactly that friction earlier in the
+  project and are not reintroducing it to save a popup. This is the trap: session keys and 7702
+  look interchangeable on a feature list, and are not — one demands commitment upfront, the other
+  does not.
+
+The third prompt is already gone: `resolveRound` is permissionless, so a keeper settles it and the
+player never signs after the chart has played out.
 
 ## Foundry
 
