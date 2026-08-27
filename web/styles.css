@@ -648,3 +648,13 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
                  text-transform: uppercase; color: var(--ink-faint); }
 .dry-tot span { font-family: var(--mono); font-size: 17px; font-weight: 600; }
 .dry-foot .primary { width: auto; margin-left: auto; padding: 10px 18px; }
+
+/* A step that advances on a real action has no button — which reads as broken unless the wait is
+   made visible. This is the affordance that says "your move" rather than leaving a gap. */
+#tourWait { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono);
+            font-size: 11px; color: var(--blue); }
+#tourWait[hidden] { display: none; }
+#tourWait i { width: 6px; height: 6px; border-radius: 50%; background: var(--blue);
+              animation: waitPulse 1.4s ease-in-out infinite; }
+#tourWait em { font-style: normal; }
+@keyframes waitPulse { 0%, 100% { opacity: .25; transform: scale(.8) } 50% { opacity: 1; transform: scale(1) } }

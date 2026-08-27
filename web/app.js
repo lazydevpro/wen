@@ -1571,9 +1571,13 @@ const tour = {
         $('tourPop').querySelector('.line').setAttribute('d', MARK_PATHS[s.mark ?? 'pointing']);
         replay($('tourPop').querySelector('.wen-mark'));   // re-trigger the draw on every step
 
-        const go = $('tourGo');
+        const go = $('tourGo'), wait = $('tourWait');
         go.hidden = !s.cta;
         if (s.cta) { go.textContent = s.cta; go.onclick = () => (s.act ? s.act() : this.next()); }
+        // A step with no button is waiting on the player. Say so — an empty button row reads as a
+        // broken tour, which is exactly how the stake step was first reported.
+        wait.hidden = !!s.cta;
+        if (!s.cta) wait.querySelector('em').textContent = s.waiting ?? 'waiting for you';
 
         this.spot(s.target ? $(s.target) : null);
     },
@@ -1639,13 +1643,16 @@ const TOUR_STEPS = [
     },
     {
         id: 'faucet', target: 'btnFaucet', mark: 'pointing', advanceOn: 'faucet:landed',
+        waiting: 'waiting for your CTC to land',
         text: 'You have no CTC. Claim 20 from the faucet — gas is covered, so a brand-new wallet ' +
               'works. It takes about fifteen seconds to land.',
     },
     {
         id: 'stake', target: 'anteGrid', mark: 'pointing', advanceOn: 'ante:picked',
+        waiting: 'tap a stake to continue',
         text: 'Pick your opening stake. It is a minimum, not a fee — it counts toward your bets, ' +
-              'so playing honestly costs you nothing extra. Tap one.',
+              'so playing honestly costs you nothing extra. Tap any amount to continue — including ' +
+              'the one already highlighted.',
     },
     {
         id: 'dry', mark: 'thinking', cta: 'try a practice board',
