@@ -696,6 +696,35 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
 /* the inset ring was standing in for a border the clip had eaten; the outline now does that job */
 .ante-chip.on { box-shadow: none; }
 
-/* clipped controls must be opaque, or the outline above fills them instead of edging them */
-.ghost, .ante-chip, .dir-btn, .mode-card { background: var(--sunken-solid); }
-.ante-chip.on, .dir-btn.on { background: var(--blue-wash-solid); }
+/* Clipped controls need the same two-layer treatment as the panels. A plain border here was still
+   being cut at both diagonals — visible as a blue line that stopped dead at the corners of a
+   selected stake chip. Lower layer is the border colour, upper layer inset 1px is the fill, both
+   sharing the control's clip, so the 1px that shows through follows the cut. */
+.ghost, .ante-chip, .dir-btn, .mode-card {
+    border: none;
+    background: transparent;
+    position: relative;
+    isolation: isolate;
+}
+.ghost::before, .ghost::after,
+.ante-chip::before, .ante-chip::after,
+.dir-btn::before, .dir-btn::after,
+.mode-card::before, .mode-card::after {
+    content: ''; position: absolute; z-index: -1;
+    clip-path: polygon(0 0, calc(100% - var(--cut-sm)) 0, 100% var(--cut-sm),
+                       100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm)));
+}
+.ghost::before, .ante-chip::before, .dir-btn::before, .mode-card::before {
+    inset: 0; background: var(--hairline-strong);
+}
+.ghost::after, .ante-chip::after, .dir-btn::after, .mode-card::after {
+    inset: 1px; background: var(--sunken-solid);
+}
+/* selection and hover recolour the whole edge, diagonals included */
+.ante-chip.on::before, .dir-btn.on::before,
+.ghost:hover::before, .ante-chip:hover::before, .dir-btn:hover::before, .mode-card:hover::before {
+    background: var(--blue);
+}
+.ante-chip.on::after, .dir-btn.on::after { background: var(--blue-wash-solid); }
+/* the clip on the element itself is now redundant — the layers carry the shape */
+.ghost, .ante-chip, .dir-btn, .mode-card { clip-path: none !important; }
