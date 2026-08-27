@@ -32,6 +32,7 @@
     <!-- winnings are pulled, never pushed: a hostile receiver must not be able to block
          permissionless resolution. This is that pull, and it only exists when there is credit. -->
     <button id="btnWithdraw" class="ghost" hidden>withdraw</button>
+    <button id="btnFeedback" class="ghost" title="tell us what broke">// feedback</button>
     <button id="btnConnect" class="ghost">connect wallet</button>
     <div class="addr" id="addr" hidden></div>
   </div>
@@ -360,6 +361,27 @@
     <div class="dry-tot"><label>picked</label><span id="dryPicked">0</span></div>
     <div class="dry-tot"><label>would pay</label><span id="dryPay" class="win">0.0</span></div>
     <button id="dryPlay" class="primary" disabled>play it forward</button>
+  </div>
+</dialog>
+
+<dialog id="fbDialog">
+  <div class="panel-head"><span class="tag">tell us what happened</span></div>
+  <div class="fb-kinds" id="fbKinds">
+    <button data-kind="bug" class="on">something broke</button>
+    <button data-kind="confused">I got lost</button>
+    <button data-kind="idea">an idea</button>
+    <button data-kind="praise">I liked it</button>
+  </div>
+  <textarea id="fbText" rows="5" maxlength="1800"
+            placeholder="What were you doing, and what did you expect to happen instead?"></textarea>
+  <p class="fineprint">
+    Sent with the screen you were on and your last error, so it can actually be chased. No email,
+    nothing tracked between visits.
+  </p>
+  <div class="fb-foot">
+    <span id="fbResult" class="guess-result"></span>
+    <button id="fbCancel" class="ghost">cancel</button>
+    <button id="fbSend" class="primary">send</button>
   </div>
 </dialog>
 

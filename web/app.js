@@ -1500,6 +1500,15 @@ function wireControls() {
     $('btnDeal').onclick = deal;
     $('tourSkip').onclick = () => tour.finish();
     $('tourNext').onclick = () => tour.next();
+    $('btnFeedback').onclick = () => feedback.open();
+    $('fbCancel').onclick = () => $('fbDialog').close();
+    $('fbSend').onclick = () => feedback.send();
+    $('fbKinds').onclick = (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        feedback.kind = b.dataset.kind;
+        $('fbKinds').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    };
     $('tourReplay').onclick = () => tour.start(true);
     $('btnLockIn').onclick = lockIn;
     $('modeGrid').onclick = () => setMode('grid');
@@ -1795,3 +1804,60 @@ if (['localhost', '127.0.0.1'].includes(location.hostname)) {
         tour.next();
     }};
 }
+
+/* ── feedback ──
+ * The free text is the least useful half. What makes a report chaseable is the context sent with
+ * it: which screen, which phase, how far in, and the last error — which the page already collects
+ * in window.__errs and until now threw away.
+ */
+const feedback = {
+    kind: 'bug',
+
+    open() {
+        $('fbResult').textContent = '';
+        $('fbText').value = '';
+        $('fbSend').disabled = false;
+        $('fbSend').textContent = 'send';
+        $('fbDialog').showModal();
+        $('fbText').focus();
+    },
+
+    context() {
+        const screen = [...document.querySelectorAll('.screen')].find((s) => s.classList.contains('active'));
+        return {
+            screen: screen?.id ?? 'unknown',
+            phase: state.phase ?? 'unknown',
+            rounds: String(state.roundId ?? '—'),
+            tutorialDone: !!localStorage.getItem(TOUR_KEY),
+            viewport: `${innerWidth}x${innerHeight}`,
+            ua: navigator.userAgent,
+            lastError: (window.__errs ?? []).slice(-1)[0] ?? '',
+        };
+    },
+
+    async send() {
+        const message = $('fbText').value.trim();
+        const out = $('fbResult');
+        if (message.length < 3) { out.className = 'guess-result no'; out.textContent = 'a few more words?'; return; }
+        const btn = $('fbSend');
+        btn.disabled = true; btn.textContent = 'sending…';
+        try {
+            const r = await fetch('/api/feedback', {
+                method: 'POST',
+                headers: {'content-type': 'application/json'},
+                body: JSON.stringify({
+                    kind: this.kind, message, address: state.address ?? '', context: this.context(),
+                }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(d.error ?? 'could not send');
+            out.className = 'guess-result ok';
+            out.textContent = '✓ sent — thank you';
+            setTimeout(() => $('fbDialog').close(), 900);
+        } catch (e) {
+            out.className = 'guess-result no';
+            out.textContent = '✗ ' + (e.message ?? e);
+            btn.disabled = false; btn.textContent = 'send';
+        }
+    },
+};

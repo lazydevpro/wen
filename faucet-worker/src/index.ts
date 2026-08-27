@@ -9,6 +9,7 @@
  * edge cache and never spend Worker CPU.
  */
 import {FaucetDO} from './faucet-do';
+import {handleFeedback} from './feedback';
 import {handleResolve} from './resolve';
 import {handleReveal} from './reveal';
 
@@ -30,6 +31,8 @@ export interface Env {
     /** Separate from the faucet key on purpose: two code paths sharing one wallet means two
      *  nonce sources, which is exactly how this project stalled runs before. */
     KEEPER_PRIVATE_KEY: string;
+    /** Discord incoming webhook. Secret — anyone holding it can post to the channel. */
+    DISCORD_WEBHOOK_URL: string;
     FAUCET_CODE: string;
 }
 
@@ -77,6 +80,14 @@ export default {
         }
 
         // keyed by windowId (0x + 64 hex) — the client never sees window ids like "luna-2022-s3"
+        if (url.pathname === '/api/feedback' && request.method === 'POST') {
+            let payload: any = {};
+            try { payload = await request.json(); } catch {}
+            const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+            const {status, body} = await handleFeedback(env, payload, ip);
+            return json(status, body);
+        }
+
         // Keeper: settles the payout so the player does not sign a third time. Best effort —
         // the client falls back to letting them resolve it themselves.
         if (url.pathname === '/api/resolve' && request.method === 'POST') {

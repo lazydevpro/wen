@@ -728,3 +728,22 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
 .ante-chip.on::after, .dir-btn.on::after { background: var(--blue-wash-solid); }
 /* the clip on the element itself is now redundant — the layers carry the shape */
 .ghost, .ante-chip, .dir-btn, .mode-card { clip-path: none !important; }
+
+/* ── feedback ── */
+#btnFeedback { font-family: var(--mono); font-size: 10.5px; }
+#fbDialog { margin: auto; border: 1px solid var(--hairline-strong); background: var(--panel);
+            color: var(--ink); padding: 20px; width: min(480px, calc(100vw - 28px)); }
+#fbDialog::backdrop { background: rgba(4, 6, 8, .78); }
+.fb-kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-bottom: 12px; }
+.fb-kinds button { font-family: var(--mono); font-size: 11px; padding: 9px 10px; cursor: pointer;
+                   background: var(--sunken-solid); color: var(--ink-mute);
+                   border: 1px solid var(--hairline-strong); }
+.fb-kinds button.on { border-color: var(--blue); color: var(--blue); background: var(--blue-wash-solid); }
+#fbText { width: 100%; background: var(--sunken-solid); border: 1px solid var(--hairline-strong);
+          color: var(--ink); font-family: var(--sans); font-size: 13px; line-height: 1.6;
+          padding: 11px 12px; resize: vertical; }
+#fbText:focus { outline: none; border-color: var(--blue); }
+.fb-foot { display: flex; align-items: center; gap: 9px; margin-top: 14px; }
+.fb-foot .primary { width: auto; padding: 9px 18px; margin-left: auto; }
+.fb-foot .ghost { padding: 8px 14px; font-size: 12px; }
+#fbResult { font-size: 11.5px; font-family: var(--mono); }
