@@ -1583,6 +1583,9 @@ const tour = {
         // player must not be stuck with "skip the whole tutorial" as their only other option —
         // especially on the stake step, where a default is already selected.
         $('tourNext').hidden = !!s.cta;
+        // Nothing left to skip on the last step — its own button already ends the tour, so an
+        // "skip tutorial" beside it is just a second way to do the same thing.
+        $('tourSkip').hidden = this.i === this.steps.length - 1;
 
         this.spot(s.target ? $(s.target) : null);
     },
