@@ -11,6 +11,11 @@
     --canvas-soft: #111417;
     --panel: #111417;
     --sunken: rgba(0, 0, 0, 0.32);
+    /* Opaque equivalents of --sunken and --blue-wash composited over --panel. The drop-shadow
+       outline used on clipped controls works off the alpha channel, so a translucent fill lets the
+       shadow bleed through and floods the whole shape with colour instead of edging it. */
+    --sunken-solid: #0b0e10;
+    --blue-wash-solid: #182033;
     --hairline: #1f2428;
     --hairline-strong: #2a3440;
     --ink: #f0efee;
@@ -460,16 +465,30 @@ blockquote.skel { color: transparent; user-select: none; min-height: 3.4em; bord
                              .hud-main { order: -1; } }
 
 /* --- the console panel: cut corner + bracket ticks --- */
+/* A clipped element cannot keep a border: clip-path cuts the border along with the corner. The
+   fix is two stacked layers with the SAME clip — the lower one in the border colour, the upper one
+   inset by 1px in the panel colour — so the 1px that shows through follows the diagonal exactly.
+   Filters were tried first and were the wrong tool: four chained drop-shadows compound (each
+   shadows the previous result, smearing the panels), and a single blurred one haloes rather than
+   edges. This costs the ::before/::after corner brackets, which were decoration; a border that
+   actually closes is worth more. */
 .panel.bracket {
     position: relative;
+    isolation: isolate;          /* keep the layers behind content without escaping the panel */
+    background: transparent;
+    border: none;
+}
+.panel.bracket::before,
+.panel.bracket::after {
+    content: ''; position: absolute; z-index: -1;
     clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
 }
-.panel.bracket::before, .panel.bracket::after {
-    content: ''; position: absolute; width: 11px; height: 11px; pointer-events: none;
-    border-color: var(--blue-edge); border-style: solid; border-width: 0;
-}
-.panel.bracket::before { top: 7px; left: 7px; border-top-width: 1px; border-left-width: 1px; }
-.panel.bracket::after { bottom: 7px; right: 7px; border-bottom-width: 1px; border-right-width: 1px; }
+.panel.bracket::before { inset: 0;   background: var(--hairline-strong); }   /* the border */
+.panel.bracket::after  { inset: 1px; background: var(--panel); }             /* the fill */
+/* panels that tint their own fill re-declare the upper layer rather than the element background */
+.start-panel::after { background: linear-gradient(180deg, var(--blue-wash), transparent 42%), var(--panel); }
+.proof-panel::before { background: var(--blue); }
+
 .tag.dim { color: var(--ink-faint); opacity: 0.7; }
 
 /* --- centre: stake + the button --- */
@@ -591,7 +610,12 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
 }
 
 /* spotlight: one element dims the page and punches the hole, via a huge outward shadow */
-#tour { position: fixed; inset: 0; z-index: 90; }
+/* pointer-events:none is what makes "tap the real thing" work. The overlay used to swallow every
+   click, and lifting the highlighted control with z-index could never fix it: .panel.bracket has a
+   clip-path, clip-path creates a stacking context, so the child's z-index is scoped inside the
+   panel and cannot rise above the overlay. Only the popover takes clicks. */
+#tour { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+#tourPop { pointer-events: auto; }
 #tourSpot {
     position: absolute; border: 1px solid var(--blue); pointer-events: none;
     box-shadow: 0 0 0 9999px rgba(4, 6, 8, .82), 0 0 26px -4px var(--blue);
@@ -612,8 +636,8 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
 .tour-btns .primary { width: auto; padding: 8px 15px; font-size: 12px; }
 .tour-btns .ghost { padding: 7px 12px; font-size: 11px; }
 #tourGo[hidden] { display: none; }
-/* the highlighted control has to stay clickable through the dimming layer */
-.tour-live { position: relative; z-index: 95; }
+/* purely visual now — the overlay no longer blocks, so nothing needs lifting */
+.tour-live { position: relative; }
 
 /* replay link in the lobby */
 .tour-replay { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
@@ -658,3 +682,20 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
               animation: waitPulse 1.4s ease-in-out infinite; }
 #tourWait em { font-style: normal; }
 @keyframes waitPulse { 0%, 100% { opacity: .25; transform: scale(.8) } 50% { opacity: 1; transform: scale(1) } }
+
+/* Same problem as the panels, same fix: a clipped element loses its border along the diagonal.
+   These controls are clipped, so their borders are drawn as a post-clip outline instead. Kept in
+   one place so the treatment stays consistent rather than being rediscovered per component. */
+.ghost, .ante-chip, .dir-btn, .eyebrow, .mode-card {
+    border: 1px solid var(--hairline-strong);
+}
+/* selection and hover recolour the whole outline, not just three sides of it */
+.ante-chip.on, .dir-btn.on, .ghost:hover, .ante-chip:hover, .dir-btn:hover, .mode-card:hover {
+    border-color: var(--blue);
+}
+/* the inset ring was standing in for a border the clip had eaten; the outline now does that job */
+.ante-chip.on { box-shadow: none; }
+
+/* clipped controls must be opaque, or the outline above fills them instead of edging them */
+.ghost, .ante-chip, .dir-btn, .mode-card { background: var(--sunken-solid); }
+.ante-chip.on, .dir-btn.on { background: var(--blue-wash-solid); }

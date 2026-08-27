@@ -1499,6 +1499,7 @@ function wireControls() {
     $('btnWithdraw').onclick = doWithdraw;
     $('btnDeal').onclick = deal;
     $('tourSkip').onclick = () => tour.finish();
+    $('tourNext').onclick = () => tour.next();
     $('tourReplay').onclick = () => tour.start(true);
     $('btnLockIn').onclick = lockIn;
     $('modeGrid').onclick = () => setMode('grid');
@@ -1578,6 +1579,10 @@ const tour = {
         // broken tour, which is exactly how the stake step was first reported.
         wait.hidden = !!s.cta;
         if (!s.cta) wait.querySelector('em').textContent = s.waiting ?? 'waiting for you';
+        // A waiting step still needs a way forward. Doing the real thing is the point, but the
+        // player must not be stuck with "skip the whole tutorial" as their only other option —
+        // especially on the stake step, where a default is already selected.
+        $('tourNext').hidden = !!s.cta;
 
         this.spot(s.target ? $(s.target) : null);
     },
