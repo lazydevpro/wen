@@ -78,9 +78,9 @@ body {
     z-index: 40;
     background: var(--canvas);
 }
-.brand { font-family: var(--display); font-size: 23px; font-weight: 500; letter-spacing: 0.5px;
+.brand { font-family: var(--display); font-size: 30px; font-weight: 500; letter-spacing: 0.5px;
          display: flex; align-items: center; gap: 9px; }
-.brand-mark { display: block; width: 21px; height: 21px; border-radius: 5px; }
+.brand-mark { display: block; width: 28px; height: 28px; border-radius: 6px; }
 .topbar-right { display: flex; gap: 16px; align-items: center; }
 .stat { display: flex; flex-direction: column; align-items: flex-end; }
 .stat label { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; color: var(--ink-faint); }
@@ -566,7 +566,7 @@ blockquote.skel { color: transparent; user-select: none; min-height: 3.4em; bord
                                   100% 100%, var(--cut-sm) 100%, 0 calc(100% - var(--cut-sm))); }
 /* these are meant to be round and must survive the token change */
 .hud-live i, .eyebrow::before { border-radius: 50% !important; clip-path: none !important; }
-.brand-mark { border-radius: 4px; }
+.brand-mark { border-radius: 6px; }
 
 /* ═══ backdrop ═══
    A near-black field of engineering grid and contour lines — the contours read as price movement,
