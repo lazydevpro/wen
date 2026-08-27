@@ -566,3 +566,85 @@ body::before {
 /* the landing page draws its own ambient chart; two moving fields at once is noise */
 body:has(#screenConnect.active)::before { opacity: 0.22; }
 @media (prefers-reduced-motion: reduce) { body::before { opacity: 0.35; } }
+
+/* ═══════════════════════ guided first run ═══════════════════════ */
+
+/* the mascot — same mark as the app icon, drawn rather than fidgeting.
+   marker lives INSIDE the svg so per-state CSS can reach the head; a shared document-level defs
+   sits outside the instance and the head then animates on its own clock. */
+.wen-mark { width: 62px; height: 40px; flex: 0 0 auto; overflow: visible; }
+.wen-mark .line {
+    fill: none; stroke: var(--blue); stroke-width: 11;
+    stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100;
+    animation: wenDraw 1s cubic-bezier(.5, 0, .2, 1) 1 forwards;
+}
+/* explicit stroke, never currentColor: context-stroke passes this element's stroke VALUE, and a
+   currentColor token would re-resolve inside the marker's own context and paint the head wrong */
+.wen-head { fill: context-stroke; animation: wenHead 1s linear 1 forwards; }
+@keyframes wenDraw { from { stroke-dashoffset: 100 } to { stroke-dashoffset: 0 } }
+@keyframes wenHead { 0%, 82% { opacity: 0 } 92%, 100% { opacity: 1 } }
+.wen-mark.won  .line { stroke: var(--win); }
+.wen-mark.lost .line { stroke: var(--lose); }
+@media (prefers-reduced-motion: reduce) {
+    .wen-mark .line { animation: none; stroke-dasharray: none; }
+    .wen-head { animation: none; opacity: 1; }
+}
+
+/* spotlight: one element dims the page and punches the hole, via a huge outward shadow */
+#tour { position: fixed; inset: 0; z-index: 90; }
+#tourSpot {
+    position: absolute; border: 1px solid var(--blue); pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(4, 6, 8, .82), 0 0 26px -4px var(--blue);
+    transition: top .28s ease, left .28s ease, width .28s ease, height .28s ease;
+}
+#tourPop {
+    position: absolute; display: flex; gap: 13px; align-items: flex-start;
+    width: min(390px, calc(100vw - 32px));
+    background: var(--panel); border: 1px solid var(--hairline); border-left: 2px solid var(--blue);
+    padding: 14px 16px; transition: top .28s ease, left .28s ease;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 100%);
+}
+.tour-body { min-width: 0; }
+#tourPop b { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.1px;
+             color: var(--ink-faint); margin-bottom: 5px; }
+#tourPop p { font-size: 13px; line-height: 1.6; }
+.tour-btns { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+.tour-btns .primary { width: auto; padding: 8px 15px; font-size: 12px; }
+.tour-btns .ghost { padding: 7px 12px; font-size: 11px; }
+#tourGo[hidden] { display: none; }
+/* the highlighted control has to stay clickable through the dimming layer */
+.tour-live { position: relative; z-index: 95; }
+
+/* replay link in the lobby */
+.tour-replay { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
+               background: none; border: none; cursor: pointer; padding: 0; margin-top: 10px; }
+.tour-replay:hover { color: var(--blue); }
+
+/* ── dry run ── */
+/* margin:auto is what centres a modal <dialog>; the global `* { margin: 0 }` reset removes it,
+   which parks the dialog in the top-left corner. */
+#dryRun { border: 1px solid var(--hairline-strong); background: var(--panel); color: var(--ink);
+          padding: 18px; width: min(660px, calc(100vw - 28px)); margin: auto; }
+#dryRun::backdrop { background: rgba(4, 6, 8, .8); }
+.dry-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+            margin-bottom: 12px; }
+.dry-note { font-family: var(--mono); font-size: 10.5px; color: var(--ink-mute); }
+.dry-wrap { position: relative; height: 260px; background: var(--sunken);
+            border: 1px solid var(--hairline); }
+#dryChart { position: absolute; inset: 0; width: 100%; height: 100%; }
+#dryGrid { position: absolute; inset: 0; display: grid; }
+#dryGrid .dcell {
+    border-right: 1px solid rgba(255,255,255,.045); border-bottom: 1px solid rgba(255,255,255,.045);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-family: var(--mono); font-size: 10px; color: var(--ink-faint); transition: .12s;
+}
+#dryGrid .dcell:hover { background: rgba(73,118,255,.1); color: var(--ink-mute); }
+#dryGrid .dcell.on { background: var(--blue-wash); color: var(--blue);
+                     box-shadow: inset 0 0 0 1px var(--blue); }
+#dryGrid .dcell.hit { background: rgba(47,208,122,.22); color: var(--win);
+                      box-shadow: inset 0 0 0 1px var(--win); }
+.dry-foot { display: flex; align-items: flex-end; gap: 14px; margin-top: 14px; }
+.dry-tot label { display: block; font-family: var(--mono); font-size: 8.5px; letter-spacing: 1px;
+                 text-transform: uppercase; color: var(--ink-faint); }
+.dry-tot span { font-family: var(--mono); font-size: 17px; font-weight: 600; }
+.dry-foot .primary { width: auto; margin-left: auto; padding: 10px 18px; }

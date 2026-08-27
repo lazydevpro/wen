@@ -558,6 +558,7 @@ async function connect() {
     refreshFaucet();
     show('screenLobby');
     loadHudStats();
+    tour.start();
     checkLegacyCredit().catch(() => {});
 }
 
@@ -653,6 +654,7 @@ function renderAnteGrid() {
             renderStake();
             renderAnteGrid();
             refreshCredit();
+            tour.notify('ante:picked');
         };
         g.appendChild(b);
     });
@@ -820,6 +822,9 @@ async function claimFaucet() {
         out.innerHTML = `✓ sent ${d.amount} CTC — <a href="${d.explorer}" target="_blank" rel="noreferrer">view tx</a>`;
         toast(`${d.amount} CTC on its way`);
         await refreshCredit();
+        // The tour waits for the balance to move, not for the API to answer — the player should
+        // see the CTC arrive, because that is the step's reward.
+        tour.notify('faucet:landed');
     } catch (e) {
         out.className = 'guess-result faucet-result-no';
         out.textContent = '✗ ' + (e.message ?? e);
@@ -1493,6 +1498,8 @@ function wireControls() {
     $('btnFaucet').onclick = claimFaucet;
     $('btnWithdraw').onclick = doWithdraw;
     $('btnDeal').onclick = deal;
+    $('tourSkip').onclick = () => tour.finish();
+    $('tourReplay').onclick = () => tour.start(true);
     $('btnLockIn').onclick = lockIn;
     $('modeGrid').onclick = () => setMode('grid');
     $('modeSimple').onclick = () => setMode('simple');
@@ -1510,4 +1517,266 @@ function wireControls() {
 
     window.ethereum?.on?.('accountsChanged', () => location.reload());
     window.ethereum?.on?.('chainChanged', () => location.reload());
+}
+
+/* ═══════════════════════ guided first run ═══════════════════════
+ *
+ * Steps advance on the REAL action — claiming, picking, betting — not on a "next" button. Clicking
+ * through explanations is the passive pattern that does not stick, and this game has to be learned
+ * by hand or the 45s clock eats the player alive on their first round.
+ *
+ * The one thing that shapes the whole design: step 3 cannot happen during a live round. The
+ * decision window is DECISION_BLOCKS on-chain and cannot be paused, so a modal tour over a real
+ * board would burn the player's stake while they read. The grid is therefore taught on a rigged
+ * practice board first, and the real round is left unguided.
+ */
+const TOUR_KEY = 'wen.tour.v1';
+const MARK_PATHS = {
+    idle:     'M12 54 L36 72 L60 30 L86 60 L112 26',
+    pointing: 'M12 60 L34 66 L58 44 L84 52 L114 30',
+    thinking: 'M12 50 L40 46 L68 54 L96 47 L118 50',
+    won:      'M12 66 L36 72 L60 46 L84 58 L118 12',
+};
+
+const tour = {
+    steps: [], i: -1, live: null, on: false,
+
+    /** Re-runnable: the lobby keeps a link so a player can ask for it again. */
+    start(force) {
+        if (!force && localStorage.getItem(TOUR_KEY)) return;
+        // A funded wallet does not need to be walked to the faucet.
+        const needsCTC = (state.wallet ?? 0n) < parseEther('1');
+        this.steps = TOUR_STEPS.filter((s) => s.id !== 'faucet' || needsCTC);
+        this.i = -1;
+        this.on = true;
+        $('tour').hidden = false;
+        this.next();
+        addEventListener('resize', this._reflow);
+        addEventListener('scroll', this._reflow, true);
+    },
+
+    next() {
+        const prev = this.steps[this.i];
+        if (prev?.onExit) prev.onExit();
+        this.i++;
+        const s = this.steps[this.i];
+        if (!s) return this.finish();
+        this.show(s);
+        if (s.onEnter) s.onEnter();
+    },
+
+    show(s) {
+        $('tourStep').textContent = `step ${this.i + 1} of ${this.steps.length}`;
+        $('tourText').textContent = s.text;
+        $('tourPop').querySelector('.line').setAttribute('d', MARK_PATHS[s.mark ?? 'pointing']);
+        replay($('tourPop').querySelector('.wen-mark'));   // re-trigger the draw on every step
+
+        const go = $('tourGo');
+        go.hidden = !s.cta;
+        if (s.cta) { go.textContent = s.cta; go.onclick = () => (s.act ? s.act() : this.next()); }
+
+        this.spot(s.target ? $(s.target) : null);
+    },
+
+    /** Move the spotlight and park the popover beside it. */
+    spot(el) {
+        this.live?.classList.remove('tour-live');
+        this.live = el;
+        const spot = $('tourSpot'), pop = $('tourPop');
+        if (!el) {
+            // No target: collapse the hole to nothing but KEEP the element, because its outward
+            // box-shadow is what dims the page. Setting opacity:0 here removed the dimming too.
+            spot.style.cssText = 'width:0;height:0;border:none;top:50%;left:50%';
+            pop.style.top = '50%'; pop.style.left = '50%';
+            pop.style.transform = 'translate(-50%,-50%)';
+            return;
+        }
+        el.classList.add('tour-live');               // lift it above the dimming layer
+        el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        const r = el.getBoundingClientRect(), pad = 8;
+        spot.style.cssText = `opacity:1;top:${r.top - pad}px;left:${r.left - pad}px;` +
+                             `width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
+        pop.style.transform = 'none';
+        const below = r.bottom + 16;
+        const fitsBelow = below + pop.offsetHeight < innerHeight - 12;
+        pop.style.top = `${fitsBelow ? below : Math.max(12, r.top - pop.offsetHeight - 16)}px`;
+        pop.style.left = `${Math.min(Math.max(12, r.left), innerWidth - pop.offsetWidth - 12)}px`;
+    },
+
+    _reflow: () => { if (tour.on && tour.live) tour.spot(tour.live); },
+
+    /** Called from the real handlers. A step only advances when its own action happens. */
+    notify(evt) {
+        if (!this.on) return;
+        if (this.steps[this.i]?.advanceOn === evt) this.next();
+    },
+
+    finish() {
+        this.on = false;
+        this.live?.classList.remove('tour-live');
+        this.live = null;
+        $('tour').hidden = true;
+        localStorage.setItem(TOUR_KEY, '1');
+        removeEventListener('resize', this._reflow);
+        removeEventListener('scroll', this._reflow, true);
+    },
+};
+
+/** Restart a CSS animation on a cloned-free element. */
+function replay(el) {
+    el.querySelectorAll('.line, .wen-head').forEach((n) => {
+        n.style.animation = 'none';
+        void n.offsetWidth;                          // force reflow so the animation re-runs
+        n.style.animation = '';
+    });
+}
+
+const TOUR_STEPS = [
+    {
+        id: 'welcome', mark: 'idle', cta: "show me",
+        text: 'You are dealt a real slice of Ethereum, never told when it is, and you bet on what ' +
+              'happened next. Sixty seconds and you will know how.',
+    },
+    {
+        id: 'faucet', target: 'btnFaucet', mark: 'pointing', advanceOn: 'faucet:landed',
+        text: 'You have no CTC. Claim 20 from the faucet — gas is covered, so a brand-new wallet ' +
+              'works. It takes about fifteen seconds to land.',
+    },
+    {
+        id: 'stake', target: 'anteGrid', mark: 'pointing', advanceOn: 'ante:picked',
+        text: 'Pick your opening stake. It is a minimum, not a fee — it counts toward your bets, ' +
+              'so playing honestly costs you nothing extra. Tap one.',
+    },
+    {
+        id: 'dry', mark: 'thinking', cta: 'try a practice board',
+        text: 'The grid sits over the future. Cells the real price path crosses pay out, and the ' +
+              'further from the last known price, the more they pay. Have a go with nothing at stake.',
+        act: () => dryRun.open(),
+        advanceOn: 'dry:done',
+    },
+    {
+        id: 'deal', target: 'btnDeal', mark: 'won', cta: 'got it',
+        text: 'That is the whole game. Once you start, the chart appears and the 45 second clock ' +
+              'is live — so read the riddle first, then bet. Good luck.',
+    },
+];
+
+/* ── the practice board ──
+ * Six columns, five rows, no chain behind it. The path is generated AFTER the player picks so it
+ * crosses one of their cells: this is a lesson, not a wager, and a first session that rewards you
+ * is the one you come back to. The header says "nothing at stake" for exactly that reason — the
+ * rigging is disclosed, not hidden.
+ */
+const DRY_COLS = 6, DRY_ROWS = 5;
+const DRY_MULT = [25, 7, 1, 7, 25];              // by row, mirrored around the middle
+
+const dryRun = {
+    picks: new Set(), path: null,
+
+    open() {
+        this.picks.clear(); this.path = null;
+        const g = $('dryGrid');
+        g.style.gridTemplateColumns = `repeat(${DRY_COLS}, 1fr)`;
+        g.style.gridTemplateRows = `repeat(${DRY_ROWS}, 1fr)`;
+        g.innerHTML = '';
+        for (let r = 0; r < DRY_ROWS; r++) {
+            for (let c = 0; c < DRY_COLS; c++) {
+                const d = document.createElement('div');
+                d.className = 'dcell';
+                d.textContent = `${DRY_MULT[r]}×`;
+                d.onclick = () => this.pick(d, c, r);
+                g.appendChild(d);
+            }
+        }
+        $('dryPicked').textContent = '0';
+        $('dryPay').textContent = '0.0';
+        $('dryNote').textContent = 'pick any two cells the line might cross';
+        $('dryPlay').disabled = true;
+        $('dryPlay').textContent = 'play it forward';
+        $('dryPlay').onclick = () => this.play();
+        $('dryRun').showModal();
+        this.draw([]);
+    },
+
+    pick(el, c, r) {
+        if (this.path) return;                        // locked once it has played
+        const key = `${c}-${r}`;
+        if (this.picks.has(key)) { this.picks.delete(key); el.classList.remove('on'); }
+        else { this.picks.add(key); el.classList.add('on'); }
+        $('dryPicked').textContent = String(this.picks.size);
+        $('dryPay').textContent = [...this.picks]
+            .reduce((a, k) => a + DRY_MULT[+k.split('-')[1]], 0).toFixed(1);
+        $('dryPlay').disabled = this.picks.size === 0;
+        if (this.picks.size) $('dryNote').textContent = 'now play it forward and watch';
+    },
+
+    /** A path that ends up crossing one of the picked cells. */
+    build() {
+        const chosen = [...this.picks][Math.floor(this.picks.size / 2)].split('-').map(Number);
+        const [tc, tr] = chosen;
+        const rows = [];
+        let r = 2;                                     // starts on the anchor row
+        for (let c = 0; c < DRY_COLS; c++) {
+            if (c === tc) r = tr;
+            else if (c < tc) r = Math.round(2 + ((tr - 2) * c) / Math.max(1, tc));
+            else r = Math.max(0, Math.min(DRY_ROWS - 1, r + (Math.random() < 0.5 ? -1 : 1)));
+            rows.push(Math.max(0, Math.min(DRY_ROWS - 1, r)));
+        }
+        return rows;
+    },
+
+    async play() {
+        if (this.path) return;
+        this.path = this.build();
+        $('dryPlay').disabled = true;
+        $('dryNote').textContent = 'the real price path, playing forward…';
+        let won = 0;
+        for (let c = 0; c < DRY_COLS; c++) {
+            await new Promise((res) => setTimeout(res, 260));
+            this.draw(this.path.slice(0, c + 1));
+            const key = `${c}-${this.path[c]}`;
+            if (this.picks.has(key)) {
+                const idx = this.path[c] * DRY_COLS + c;
+                $('dryGrid').children[idx].classList.add('hit');
+                won += DRY_MULT[this.path[c]];
+            }
+        }
+        $('dryPay').textContent = won.toFixed(1);
+        $('dryPay').className = won > 0 ? 'win' : '';
+        $('dryNote').textContent = won > 0
+            ? `the line crossed your cells — that would have paid ${won.toFixed(1)}×`
+            : 'it missed this time. that happens — the far cells pay more for a reason.';
+        const btn = $('dryPlay');
+        btn.disabled = false;
+        btn.textContent = 'got it';
+        btn.onclick = () => { $('dryRun').close(); tour.notify('dry:done'); };
+    },
+
+    /** Straight-line chart through the row centres, drawn as far as `rows` goes. */
+    draw(rows) {
+        const cv = $('dryChart'), wrap = cv.parentElement;
+        const dpr = devicePixelRatio || 1;
+        cv.width = wrap.clientWidth * dpr; cv.height = wrap.clientHeight * dpr;
+        const x = cv.getContext('2d');
+        x.setTransform(dpr, 0, 0, dpr, 0, 0);
+        x.clearRect(0, 0, wrap.clientWidth, wrap.clientHeight);
+        if (!rows.length) return;
+        const cw = wrap.clientWidth / DRY_COLS, ch = wrap.clientHeight / DRY_ROWS;
+        x.strokeStyle = getComputedStyle(document.body).getPropertyValue('--blue').trim() || '#4976ff';
+        x.lineWidth = 2.5; x.lineJoin = 'round'; x.lineCap = 'round';
+        x.beginPath();
+        x.moveTo(0, 2.5 * ch + ch / 2);
+        rows.forEach((r, c) => x.lineTo(c * cw + cw / 2, r * ch + ch / 2));
+        x.stroke();
+    },
+};
+
+// Local-only test handle. The tour advances on real on-chain events, which cannot be produced
+// against a dev server, so stepping through it by hand needs a way in. Guarded by hostname so it
+// never exists in production.
+if (['localhost', '127.0.0.1'].includes(location.hostname)) {
+    window.__wen = {tour, dryRun, step: (id) => {
+        tour.i = tour.steps.findIndex((s) => s.id === id) - 1;
+        tour.next();
+    }};
 }

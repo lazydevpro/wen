@@ -134,6 +134,7 @@
             Your stake counts toward your bets, so an honest player pays nothing extra. Walk away
             once the chart is up and it is forfeit — that is what stops anyone looking it up.
           </p>
+          <button id="tourReplay" class="tour-replay">// replay the tutorial</button>
         </div>
 
         <div class="panel bracket">
@@ -314,6 +315,51 @@
 <div id="riddleIntro" hidden aria-hidden="true">
   <p id="riddleIntroText"></p>
 </div>
+
+<!-- ─────────────────────────── guided first run ───────────────────────────
+     The spotlight is a single element with a huge outward box-shadow, so one div dims the whole
+     page and punches a hole at once. The popover is positioned against the highlighted rect.
+     Steps advance on the REAL action — claiming, picking, betting — never on a "next" button,
+     because clicking through explanations is exactly the passive pattern that does not stick. -->
+<div id="tour" hidden>
+  <div id="tourSpot"></div>
+  <div id="tourPop" role="dialog" aria-live="polite">
+    <svg class="wen-mark" viewBox="0 0 132 84" aria-hidden="true">
+      <defs><marker id="tourHead" viewBox="0 0 10 10" refX="3.4" refY="5"
+             markerWidth="3.1" markerHeight="3.1" orient="auto" markerUnits="strokeWidth">
+        <path class="wen-head" fill="context-stroke" d="M0.6 0.9 L9.4 5 L0.6 9.1 L2.6 5 Z" />
+      </marker></defs>
+      <path class="line" pathLength="100" marker-end="url(#tourHead)" d="" />
+    </svg>
+    <div class="tour-body">
+      <b id="tourStep"></b>
+      <p id="tourText"></p>
+      <div class="tour-btns">
+        <button id="tourGo" class="primary"></button>
+        <button id="tourSkip" class="ghost">skip</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- The dry run. A rigged board with no chain behind it, so the grid is learned before any money
+     is at stake — and it ends in a win, because a first session that rewards you is the one you
+     come back to. -->
+<dialog id="dryRun" closedby="none">
+  <div class="dry-head">
+    <span class="tag">practice — nothing at stake</span>
+    <span class="dry-note" id="dryNote">pick any two cells the line might cross</span>
+  </div>
+  <div class="dry-wrap">
+    <canvas id="dryChart"></canvas>
+    <div id="dryGrid"></div>
+  </div>
+  <div class="dry-foot">
+    <div class="dry-tot"><label>picked</label><span id="dryPicked">0</span></div>
+    <div class="dry-tot"><label>would pay</label><span id="dryPay" class="win">0.0</span></div>
+    <button id="dryPlay" class="primary" disabled>play it forward</button>
+  </div>
+</dialog>
 
 <div id="toast" class="toast"></div>
 
