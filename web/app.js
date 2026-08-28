@@ -1816,6 +1816,7 @@ const feedback = {
     open() {
         $('fbResult').textContent = '';
         $('fbText').value = '';
+        $('fbContact').value = '';
         $('fbSend').disabled = false;
         $('fbSend').textContent = 'send';
         $('fbDialog').showModal();
@@ -1846,7 +1847,8 @@ const feedback = {
                 method: 'POST',
                 headers: {'content-type': 'application/json'},
                 body: JSON.stringify({
-                    kind: this.kind, message, address: state.address ?? '', context: this.context(),
+                    kind: this.kind, message, address: state.address ?? '',
+                    contact: $('fbContact').value.trim(), context: this.context(),
                 }),
             });
             const d = await r.json().catch(() => ({}));

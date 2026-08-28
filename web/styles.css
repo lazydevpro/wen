@@ -747,3 +747,9 @@ body:has(#screenConnect.active)::before { opacity: 0.22; }
 .fb-foot .primary { width: auto; padding: 9px 18px; margin-left: auto; }
 .fb-foot .ghost { padding: 8px 14px; font-size: 12px; }
 #fbResult { font-size: 11.5px; font-family: var(--mono); }
+
+.fb-contact { width: 100%; margin-top: 9px; background: var(--sunken-solid);
+              border: 1px solid var(--hairline-strong); color: var(--ink);
+              font-family: var(--mono); font-size: 12px; padding: 9px 11px; }
+.fb-contact:focus { outline: none; border-color: var(--blue); }
+.fb-contact::placeholder { color: var(--ink-faint); }

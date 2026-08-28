@@ -37,6 +37,9 @@ export async function handleFeedback(env: Env, body: any, ip: string) {
     const KINDS = {bug: 0xff4d4d, idea: 0x4976ff, confused: 0xffc24d, praise: 0x2fd07a, note: 0x4976ff};
     const kind: keyof typeof KINDS = kind_(body?.kind);
     const addr = clean(body?.address, 42);
+    // One box for email, Discord or Telegram. Not parsed or validated — a human reads it, and
+    // guessing which of the three someone meant only creates a way to reject a valid handle.
+    const contact = clean(body?.contact, 120);
     const ctx = body?.context ?? {};
 
     const colour = KINDS[kind];
@@ -55,6 +58,8 @@ export async function handleFeedback(env: Env, body: any, ip: string) {
                 field('tutorial', ctx.tutorialDone ? 'finished' : 'not finished'),
                 field('wallet', addr ? `\`${addr.slice(0, 10)}…${addr.slice(-6)}\`` : 'not connected'),
                 field('viewport', clean(ctx.viewport, 24)),
+                // first, because it is the only field that decides whether anyone replies
+                {name: contact ? '📣 wants a reply' : 'reply', value: contact || 'not given', inline: false},
                 // Already collected by the page's error handler and previously thrown away. Half of
                 // "the UI is broken" reports are one browser and one stack trace.
                 {name: 'last error', value: clean(ctx.lastError, 400) || '—', inline: false},
