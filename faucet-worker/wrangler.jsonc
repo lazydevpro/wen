@@ -23,6 +23,18 @@
   },
   "migrations": [{"tag": "v1", "new_sqlite_classes": ["FaucetDO"]}],
 
+  // The public home. Custom Domains (rather than routes) mean Cloudflare owns the DNS record and
+  // the certificate, so there is nothing to renew and no origin to point at.
+  "routes": [
+    {"pattern": "wenctc.fun", "custom_domain": true},
+    {"pattern": "www.wenctc.fun", "custom_domain": true}
+  ],
+
+  // Load-bearing: declaring any route silently turns workers.dev OFF, which takes
+  // wen.lazydevpro.workers.dev down with it. That URL is in the hackathon submission and in
+  // messages already sent, so it has to keep answering. Do not remove this line.
+  "workers_dev": true,
+
   "observability": {"enabled": true},
 
   // Public config. The only secret is FAUCET_PRIVATE_KEY, set with `wrangler secret put`

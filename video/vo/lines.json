@@ -1,0 +1,90 @@
+{
+    "_comment": "Voiceover for wen-launch.mp4. `start` is seconds into the video; the merge script places each clip at exactly that time, so clips need only start cleanly on the first word — no trimming to length. `budget` is the gap before the next line begins, measured off the visual beats; every line was checked against a 175wpm read with headroom. Edit here, not in script.md: scripts/merge-audio.js reads this file.",
+    "duration": 42,
+    "lines": [
+        {
+            "id": "01",
+            "start": 0.3,
+            "budget": 1.9,
+            "text": "Everyone called the bottom.",
+            "note": "Deliberate, a little dry. Lands in unison with the line typing on screen."
+        },
+        {
+            "id": "02",
+            "start": 2.4,
+            "budget": 2.3,
+            "text": "Prove it.",
+            "note": "Flat challenge, no lift at the end. This is the whole pitch. Take the pause before it."
+        },
+        {
+            "id": "03",
+            "start": 4.9,
+            "budget": 3.5,
+            "text": "Every round is a real slice of Ethereum history.",
+            "note": "Tempo picks up here. Plays over the board arriving."
+        },
+        {
+            "id": "04",
+            "start": 8.6,
+            "budget": 3.1,
+            "text": "The riddle is your only clue to when.",
+            "note": "The riddle has finished typing by now — let the viewer read it under this."
+        },
+        {
+            "id": "05",
+            "start": 11.9,
+            "budget": 3.2,
+            "text": "You're never told when this is.",
+            "note": "In unison with the title. Slow down; this is the thesis."
+        },
+        {
+            "id": "06",
+            "start": 15.3,
+            "budget": 2.5,
+            "text": "Now bet on where it goes next.",
+            "note": "Over the grid dealing in."
+        },
+        {
+            "id": "07",
+            "start": 18,
+            "budget": 4.5,
+            "text": "Pick the cells it has to pass through. Further out pays more.",
+            "note": "Over the eight picks landing one by one."
+        },
+        {
+            "id": "08",
+            "start": 22.7,
+            "budget": 2.3,
+            "text": "Then the history plays forward.",
+            "note": "Just before the white path starts walking."
+        },
+        {
+            "id": "09",
+            "start": 25.2,
+            "budget": 4.3,
+            "text": "Not a simulation. Every candle is a real Uniswap swap.",
+            "note": "Over the cells resolving. Hit 'real'."
+        },
+        {
+            "id": "10",
+            "start": 29.7,
+            "budget": 4.4,
+            "text": "May 2022. People called the bottom here too.",
+            "note": "Read the year as 'May twenty twenty-two'. Beat of silence before it — this is the payoff."
+        },
+        {
+            "id": "11",
+            "start": 34.3,
+            "budget": 3.7,
+            "text": "And every one of them, proven on Creditcoin.",
+            "note": "Don't rush it. The number is already on screen at full size, so this line only has to name where the proof lives."
+        },
+        {
+            "id": "12",
+            "start": 38.2,
+            "budget": 3.6,
+            "text": "wen. Bet on what already happened. wenctc dot fun.",
+            "note": "'wen' as a word, not W-E-N. Domain spoken as 'wen C T C dot fun'."
+        }
+    ]
+}

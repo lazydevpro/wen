@@ -9,6 +9,11 @@ optimizer = true
 optimizer_runs = 200
 evm_version = "shanghai"
 
+# Creditcoin runs Frontier (Substrate EVM), whose block headers carry no prevrandao. Without this,
+# `forge script` aborts against CC3 Testnet before it sends anything. This is the fix Creditcoin
+# published in the BUIDL FAQ (Q10); we had been working around it with `forge create` instead.
+bypass_prevrandao = true
+
 # tests read a real Attestcoin proof captured from CC3 Testnet
 fs_permissions = [{access = "read", path = "./test/fixtures"}]
 

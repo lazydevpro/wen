@@ -34,6 +34,19 @@ worker/data/
 .dev.vars
 .wrangler/
 
+# Rendered launch video — re-renderable with `npm run render` in video/
+video/out/
+
+# Recorded voiceover and music. The script and timings are versioned (video/vo/lines.json,
+# video/script.md); the audio itself is binary and belongs with the upload, not the repo.
+video/vo/**/*.wav
+video/vo/**/*.mp3
+video/vo/**/*.m4a
+video/vo/**/*.aac
+video/vo/**/*.flac
+video/vo/**/*.ogg
+video/vo/**/*.aiff
+
 # Generated window pool — rebuildable with `pnpm bulk-windows` (large, and reveals are answers)
 worker/data/windows/
 worker/data/reveals/
