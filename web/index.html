@@ -305,14 +305,42 @@
 
 <!-- ─────────────────────────── result ─────────────────────────── -->
 <section id="screenResult" class="screen">
+  <!-- Two columns on desktop: the round on the left, what you do about it on the right. Stacked
+       they ran past the fold on a laptop, which put "share on X" somewhere nobody scrolls to. -->
   <div class="result-card">
-    <div id="resultVerdict" class="verdict">—</div>
-    <div id="resultAmount" class="amount">0</div>
-    <p id="resultEra" class="result-era"></p>
-    <div id="resultBreakdown" class="breakdown"></div>
-    <div class="result-actions">
-      <button id="btnAgain" class="primary">play again</button>
+    <div class="result-main">
+      <div id="resultVerdict" class="verdict">—</div>
+      <div id="resultAmount" class="amount">0</div>
+      <p id="resultEra" class="result-era"></p>
+      <div id="resultBreakdown" class="breakdown"></div>
     </div>
+
+    <div class="result-side">
+
+    <!-- The shareable card. Rendered as real DOM rather than an image so it stays legible and
+         selectable in-app; "save card" redraws the same content onto a canvas for attaching to
+         a post, because X's web intent cannot carry an image. -->
+    <div id="shareCard" class="share-card">
+      <div class="sc-head">ARE YOU A WEB3 OG?</div>
+      <dl class="sc-rows">
+        <div id="scEventRow"><dt>🧩 Event</dt><dd id="scEvent">—</dd></div>
+        <div><dt>📅 Date</dt><dd id="scDate">—</dd></div>
+        <!-- One row, two meanings: cells hit in grid mode, the call you made in up/down. Both
+             modes have something worth posting here, so it is filled rather than hidden. -->
+        <div><dt id="scStatLabel">🎯 Cells hit</dt><dd id="scStat">—</dd></div>
+        <div><dt>💰 Return</dt><dd id="scReturn">—</dd></div>
+      </dl>
+      <div id="scTagline" class="sc-tagline">—</div>
+      <div class="sc-domain">wenctc.fun</div>
+    </div>
+
+    <div class="result-actions">
+      <button id="btnShareX" class="primary">share on X</button>
+      <button id="btnSaveCard" class="ghost">save card</button>
+      <button id="btnAgain" class="ghost">play again</button>
+    </div>
+    </div>
+
     <div class="lb">
       <div class="tag">best rounds</div>
       <ol id="leaderboard"></ol>

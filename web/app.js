@@ -1331,6 +1331,10 @@ function finish(payout) {
     $('resultAmount').className = 'amount ' + (net > 0 ? 'up' : net < 0 ? 'down' : '');
     $('resultEra').innerHTML = `This was <strong>${state.reveal.eraLabel}</strong>.<br />${state.win.riddle}`;
 
+    // Only the breakdown differs between the two modes. Everything after it — the share card, the
+    // score, the phase — is identical, so the branch covers the difference and nothing else. It
+    // used to `return` out of the simple case, which silently skipped the share card and left the
+    // X button dead for every up/down round.
     if (state.mode === 'simple') {
         // the direction is decided by the FINAL candle against the anchor, not by any band
         const closed = state.reveal.hidden[state.reveal.hidden.length - 1].c;
@@ -1341,24 +1345,208 @@ function finish(payout) {
             `<span class="${right ? 'w' : 'l'}">${right ? '+' + payout.toFixed(2) : '−' + staked.toFixed(1)}</span></div>` +
             `<div><span>closed ${wentUp ? 'above' : 'below'} $${state.win.anchorPrice.toFixed(2)}</span>` +
             `<span>$${closed.toFixed(2)}</span></div>`;
-        recordScore(state.reveal.eraLabel, net);
-        setPhase(PHASE.RESULT);
-        show('screenResult');
-        return;
+    } else {
+        // Winners first, then by step. The list scrolls once it is long, and the rows worth
+        // reading must be above the fold — nobody scrolls a losing ledger to find their one hit.
+        $('resultBreakdown').innerHTML = [...state.picks.values()]
+            .map((b) => ({...b, hit: bands[b.t]?.p === b.p}))
+            .sort((a, b) => (b.hit - a.hit) || (a.t - b.t) || (a.p - b.p))
+            .map((b) => {
+                const pay = b.hit ? b.stake * b.mult : 0;
+                return `<div><span>t${b.t} · band ${b.p} @ ${fmtMult(b.mult)}</span>` +
+                    `<span class="${b.hit ? 'w' : 'l'}">${b.hit ? '+' + pay.toFixed(2) : '−' + b.stake.toFixed(1)}</span></div>`;
+            })
+            .join('');
     }
 
-    $('resultBreakdown').innerHTML = [...state.picks.values()]
-        .map((b) => {
-            const hit = bands[b.t]?.p === b.p;
-            const pay = hit ? b.stake * b.mult : 0;
-            return `<div><span>t${b.t} · band ${b.p} @ ${fmtMult(b.mult)}</span>` +
-                `<span class="${hit ? 'w' : 'l'}">${hit ? '+' + pay.toFixed(2) : '−' + b.stake.toFixed(1)}</span></div>`;
-        })
-        .join('');
-
+    markBreakdownOverflow();
     recordScore(state.reveal.eraLabel, net);
+    buildShareCard(payout, staked, bands);
     setPhase(PHASE.RESULT);
     show('screenResult');
+}
+
+/**
+ * Fades the foot of the pick list while there is more of it below, and clears the fade once the
+ * player reaches the end — a permanent fade would dim the last row of a list they had already
+ * finished reading.
+ */
+function markBreakdownOverflow() {
+    const bd = $('resultBreakdown');
+    const sync = () => {
+        const more = bd.scrollHeight - bd.scrollTop - bd.clientHeight > 4;
+        bd.classList.toggle('more', more);
+    };
+    bd.onscroll = sync;
+    // the list is populated but not yet laid out, so measure after the browser has done it
+    requestAnimationFrame(sync);
+}
+
+// ─────────────────────────────────────────────────────── share card
+
+/** What the last finished round should say when it leaves the site. Rebuilt every round. */
+let shareData = null;
+
+/**
+ * Era labels come in two shapes — "May 2022 — Luna collapses" and bare "November 2021" — because
+ * only the eras with a story worth naming carry a suffix. Splitting on the em dash gives the event
+ * when there is one and an empty string when there is not, and the card drops the row rather than
+ * inventing a name for a month that was just a month.
+ */
+function splitEra(label) {
+    const [date, ...rest] = String(label).split('—');
+    return {date: date.trim(), event: rest.join('—').trim()};
+}
+
+function buildShareCard(payout, staked, bands) {
+    const {date, event} = splitEra(state.reveal.eraLabel);
+    // return as a multiple of what went in, which is the number people actually compare
+    const mult = staked > 0 ? payout / staked : 0;
+    const won = payout > staked;
+
+    // Both modes get a stat row, because both have something worth posting — up/down has no cells
+    // to count, but which way you called it is the whole story of that round.
+    let stat;
+    if (state.mode === 'simple') {
+        const closed = state.reveal.hidden[state.reveal.hidden.length - 1].c;
+        const wentUp = closed > state.win.anchorPrice;
+        const right = wentUp === state.dir;
+        stat = {
+            emoji: state.dir ? '📈' : '📉',
+            label: 'Call',
+            value: `${state.dir ? 'UP' : 'DOWN'} ${right ? '✓' : '✗'}`,
+            good: right,
+        };
+    } else {
+        const picks = [...state.picks.values()];
+        const n = picks.filter((b) => bands[b.t]?.p === b.p).length;
+        stat = {emoji: '🎯', label: 'Cells hit', value: `${n}/${picks.length}`, good: n > 0};
+    }
+
+    // A loss is more shareable than a win if you let the player be the joke, so it gets its own
+    // line rather than a softened version of the winning one.
+    const tagline = won ? 'I survived this one. Did you?' : 'I did not survive this one. Think you would?';
+
+    $('scEvent').textContent = event.toUpperCase();
+    $('scEventRow').hidden = !event;
+    $('scDate').textContent = date;
+    $('scStatLabel').textContent = `${stat.emoji} ${stat.label}`;
+    $('scStat').textContent = stat.value;
+    $('scStat').className = stat.good ? 'up' : 'down';
+    $('scReturn').textContent = `${mult.toFixed(2)}×`;
+    $('scReturn').className = won ? 'up' : mult < 1 ? 'down' : '';
+    $('scTagline').textContent = tagline;
+
+    shareData = {date, event, stat, mult, won, tagline};
+}
+
+/** The post body. The link is left to X's `url` param so it unfurls instead of sitting inline. */
+function shareText() {
+    const d = shareData;
+    if (!d) return '';
+    const rows = [
+        d.event ? `🧩 Event: ${d.event.toUpperCase()}` : null,
+        `📅 ${d.date}`,
+        `${d.stat.emoji} ${d.stat.label}: ${d.stat.value}`,
+        `💰 ${d.mult.toFixed(2)}×`,
+    ].filter(Boolean);
+    return `ARE YOU A WEB3 OG?\n\n${rows.join('\n')}\n\n${d.tagline}`;
+}
+
+function shareOnX() {
+    if (!shareData) return;
+    // Built by hand rather than with URLSearchParams, which encodes a space as "+". That only
+    // means "space" under form-encoding rules; %20 means it everywhere. x.com direct because
+    // twitter.com/intent/tweet is a 301 to exactly this.
+    const q = `text=${encodeURIComponent(shareText())}&url=${encodeURIComponent('https://wenctc.fun')}`;
+    window.open(`https://x.com/intent/tweet?${q}`, '_blank', 'noopener,noreferrer');
+}
+
+/**
+ * Redraws the card at 1200×675 for attaching to a post — X's web intent cannot carry an image, so
+ * the player attaches it themselves. Drawn straight onto a canvas rather than rasterising the DOM:
+ * no dependency, no font-loading race, and full control of the export size.
+ */
+function saveCard() {
+    if (!shareData) return;
+    const d = shareData;
+    const W = 1200, H = 675, P = 78;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    const tone = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+    const ink = tone('--ink'), mute = tone('--ink-mute'), blue = tone('--blue');
+    const display = `'Tektur', monospace`, mono = `'Source Code Pro', monospace`;
+
+    c.fillStyle = tone('--canvas');
+    c.fillRect(0, 0, W, H);
+    // the same cut corner the panels use, so the export is recognisably from the game
+    const cut = 34;
+    c.fillStyle = tone('--canvas-soft');
+    c.beginPath();
+    c.moveTo(P - 26, P - 26);
+    c.lineTo(W - P + 26 - cut, P - 26);
+    c.lineTo(W - P + 26, P - 26 + cut);
+    c.lineTo(W - P + 26, H - P + 26);
+    c.lineTo(P - 26 + cut, H - P + 26);
+    c.lineTo(P - 26, H - P + 26 - cut);
+    c.closePath();
+    c.fill();
+    c.fillStyle = blue;
+    c.fillRect(P - 26, P - 26, 5, H - 2 * (P - 26));
+
+    c.textBaseline = 'alphabetic';
+    c.fillStyle = ink;
+    c.font = `500 46px ${display}`;
+    c.fillText('ARE YOU A WEB3 OG?', P, 132);
+
+    const rows = [
+        d.event ? ['🧩 Event', d.event.toUpperCase(), null] : null,
+        ['📅 Date', d.date, null],
+        [`${d.stat.emoji} ${d.stat.label}`, d.stat.value, d.stat.good],
+        ['💰 Return', `${d.mult.toFixed(2)}×`, d.won],
+    ].filter(Boolean);
+
+    // The header sits at the top and the sign-off is pinned to the bottom, so the rows are centred
+    // in what is left. A round with no event name has one row fewer, and centring keeps that card
+    // balanced instead of leaving a hole above the rule.
+    const TOP = 190, RULE = 520, STEP = 56;
+    let y = TOP + (RULE - TOP - rows.length * STEP) / 2 + 40;
+    for (const [k, v, good] of rows) {
+        c.font = `400 29px ${mono}`;
+        c.fillStyle = mute;
+        c.fillText(k, P, y);
+        c.font = `600 29px ${mono}`;
+        // `good` is null for rows that are neither won nor lost — those stay plain ink
+        c.fillStyle = good === null ? ink : good ? tone('--win') : tone('--lose');
+        c.textAlign = 'right';
+        c.fillText(v, W - P, y);
+        c.textAlign = 'left';
+        y += STEP;
+    }
+
+    c.strokeStyle = tone('--hairline-strong');
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(P, RULE);
+    c.lineTo(W - P, RULE);
+    c.stroke();
+
+    c.fillStyle = ink;
+    c.font = `500 34px ${display}`;
+    c.fillText(d.tagline, P, 570);
+    c.fillStyle = blue;
+    c.font = `400 26px ${mono}`;
+    c.fillText('wenctc.fun', P, 612);
+
+    cv.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `wen-${d.date.toLowerCase().replace(/\s+/g, '-')}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        toast('card saved — attach it to your post');
+    }, 'image/png');
 }
 
 // ─────────────────────────────────────────────────────── chart
@@ -1516,6 +1704,8 @@ function wireControls() {
     $('dirUp').onclick = () => pickDirection(true);
     $('dirDown').onclick = () => pickDirection(false);
     $('btnAgain').onclick = () => { setPhase(PHASE.IDLE); refreshFaucet(); show('screenLobby'); };
+    $('btnShareX').onclick = shareOnX;
+    $('btnSaveCard').onclick = saveCard;
     $('btnGuess').onclick = checkGuess;
     $('guessInput').addEventListener('keydown', (e) => e.key === 'Enter' && checkGuess());
 

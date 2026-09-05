@@ -225,18 +225,74 @@ button { font-family: var(--sans); cursor: pointer; }
 
 /* ───────────────────────── result ───────────────────────── */
 .result-card {
-    max-width: 470px; margin: 48px auto; text-align: center;
-    background: var(--panel); border: 1px solid var(--hairline); border-radius: var(--radius-lg); padding: 40px 34px;
+    max-width: 620px; margin: 36px auto; text-align: center;
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: var(--radius-lg); padding: 38px 34px;
+    display: grid; grid-template-columns: 1fr; gap: 0 34px; align-items: start;
+}
+/* Wide enough for two columns: the round on the left, what to do about it on the right. Stacked,
+   a heavy round pushed the share card and buttons past the fold of a 1440x790 laptop — which is
+   the one place they must never be. The leaderboard spans both, below. */
+@media (min-width: 940px) {
+    .result-card { max-width: 980px; grid-template-columns: 1.02fr 0.98fr; }
+    .result-side { position: sticky; top: 8px; }
+    .lb { grid-column: 1 / -1; }
 }
 .verdict { font-family: var(--display); font-size: 33px; font-weight: 500; margin-bottom: 6px; }
 .verdict.won { color: var(--win); }
 .amount { font-family: var(--mono); font-size: 44px; font-weight: 600; letter-spacing: -1.5px; }
 .result-era { color: var(--ink-mute); font-size: 12.5px; margin: 14px 0 22px; line-height: 1.65; }
-.breakdown { text-align: left; font-family: var(--mono); font-size: 11px; display: flex;
-             flex-direction: column; gap: 6px; margin-bottom: 26px; }
-.breakdown div { display: flex; justify-content: space-between; padding: 7px 11px; background: var(--sunken); border-radius: 2px; }
+
+/* There is no cap on how many cells a player may back, so this list is unbounded and it is the
+   only part of the result that grows. Two columns halve it once there is room, and the max-height
+   bounds it absolutely — without that, a heavy round pushes the share card and the buttons below
+   the fold, which is exactly where they must never be. */
+.breakdown { text-align: left; font-family: var(--mono); font-size: 11px;
+             display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 22px;
+             max-height: 232px; overflow-y: auto; scrollbar-width: thin;
+             scrollbar-color: var(--hairline-strong) transparent; }
+.breakdown div { display: flex; justify-content: space-between; gap: 10px;
+                 padding: 7px 11px; background: var(--sunken); border-radius: 2px; }
 .breakdown .w { color: var(--win); }
 .breakdown .l { color: var(--lose); }
+/* a hit is what the player came to see, so it stays legible when the list is long */
+.breakdown div:has(.w) { background: rgba(47, 208, 122, 0.09); }
+@media (min-width: 560px) { .breakdown { grid-template-columns: 1fr 1fr; } }
+/* Back to one column, counter-intuitively: past 940px the card splits in two and this list moves
+   into a 446px column rather than the full 552px one, so two tracks of ~215px leave a 250.0x
+   multiplier nothing to sit in. The extra height is free — the right-hand column sets the card's.
+   Must stay below the 560px rule: same specificity, so source order decides. */
+@media (min-width: 940px) { .breakdown { grid-template-columns: 1fr; max-height: 330px; } }
+/* Applied only while there is more below — a capped list that simply stops at a clean edge reads
+   as the end of the list, and the player never learns the rest of their round is down there. */
+.breakdown.more { mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent); }
+
+.result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.result-actions button { flex: 0 0 auto; }
+.result-actions .primary { flex: 1 1 100%; }
+
+/* ───────────────────────── share card ─────────────────────────
+   The result as something worth posting. Deliberately louder than the panel around it — a cut
+   corner, a blue rule, the wordmark domain — because this is the one element meant to be
+   screenshotted and leave the site. Kept as DOM so it stays crisp on any display; the PNG for
+   attaching to a post is redrawn on a canvas in app.js from the same values. */
+.share-card {
+    /* capped rather than full-bleed: past this width the four rows strand their values against the
+       far edge and the card reads as a table rather than something you would post */
+    position: relative; text-align: left; max-width: 430px; margin: 0 auto 18px; padding: 20px 22px 18px;
+    background: var(--sunken-solid); border-left: 2px solid var(--blue);
+    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+}
+.sc-head { font-family: var(--display); font-size: 15px; letter-spacing: 0.6px; color: var(--ink); margin-bottom: 14px; }
+.sc-rows { display: flex; flex-direction: column; gap: 6px; }
+.sc-rows > div { display: flex; justify-content: space-between; align-items: baseline;
+                 font-family: var(--mono); font-size: 11.5px; }
+.sc-rows dt { color: var(--ink-mute); }
+.sc-rows dd { color: var(--ink); font-weight: 600; }
+.sc-rows dd.up { color: var(--win); }
+.sc-rows dd.down { color: var(--lose); }
+.sc-tagline { font-family: var(--display); font-size: 13px; color: var(--ink); margin-top: 15px;
+              padding-top: 13px; border-top: 1px solid var(--hairline-strong); }
+.sc-domain { font-family: var(--mono); font-size: 11px; letter-spacing: 1.2px; color: var(--blue); margin-top: 7px; }
 
 /* ───────────────────────── toast ───────────────────────── */
 .toast {
@@ -304,6 +360,8 @@ button { font-family: var(--sans); cursor: pointer; }
     .price-now span { font-size: 21px; }
     .result-card { margin: 26px auto; padding: 30px 20px; }
     .amount { font-size: 38px; }
+    /* less room on screen, so the list gets a smaller share of it */
+    .breakdown { max-height: 176px; }
 }
 
 /* ───────────────────────── bet mode ─────────────────────────
